@@ -1,4 +1,7 @@
 import 'dotenv/config';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -43,14 +46,22 @@ import rateLimit from 'express-rate-limit';
 import { persistUploads, UPLOAD_DIR } from './lib/storage.js';
 
 const app = express();
-app.use(helmet());
+// Content security: our own assets plus Razorpay checkout and Google Fonts
+app.use(helmet({
+  contentSecurityPolicy: { directives: {
+    defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://checkout.razorpay.com'], frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
+    styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+    imgSrc: ["'self'", 'data:', 'blob:', 'https:'], connectSrc: ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'], objectSrc: ["'none'"],
+  } },
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') ?? true }));
 app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
 app.use(express.json({ limit: '8mb' }));
 // Rate limits: brute-force protection on auth, and a general ceiling per IP
 const noLimits = process.env.DISABLE_RATE_LIMIT === 'true'; // automated tests only
 const limiter = (windowMin: number, max: number, message: string, byEmail = false) => rateLimit({
-  windowMs: windowMin * 60_000, max, standardHeaders: true, legacyHeaders: false, message: { error: message }, skip: () => noLimits,
+  windowMs: windowMin * 60_000, max, standardHeaders: true, legacyHeaders: false, message: { error: message }, skip: (req) => noLimits || ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip ?? ''), // local tooling (demo loader) only
   ...(byEmail && { keyGenerator: (req) => `${req.ip}|${String(req.body?.email ?? '').toLowerCase()}` }),
 });
 app.use('/api/auth/login', limiter(15, 10, 'Too many login attempts. Please wait 15 minutes and try again.', true));
@@ -124,6 +135,12 @@ app.use('/api/players', players);
 app.use('/api/messages', messages);
 app.use('/api/notifications', notifications);
 app.use('/api/admin', admin);
+// Production: serve the built web app from the same origin (single service deploy)
+const webDist = process.env.WEB_DIST ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
+if (fs.existsSync(path.join(webDist, 'index.html'))) {
+  app.use(express.static(webDist, { index: false, maxAge: '1h', setHeaders: (res, f) => { if (/\/assets\//.test(f)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); } }));
+  app.get(/^(?!\/api\/|\/files\/).*/, (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
+}
 app.use(errorHandler);
 
 const port = Number(process.env.PORT ?? 4000);

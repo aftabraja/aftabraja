@@ -470,7 +470,7 @@ assert(!noNote, 'rejection needs a note');
 await req(`${LG}/contracts/${nda.id}/decide`, { decision: 'REJECTED', note: 'Confidentiality period should be 3 years' }, OPS);
 assert((await req(`${C}/${nda.id}`, null, T)).status === 'DRAFT', 'rejected contract returns to draft');
 // vendor compliance documents + expiry alerts
-const ADMIN = await login('admin@sportsiq.in', 'ChangeMe@123');
+const ADMIN = await login(process.env.SUPERADMIN_EMAIL ?? 'admin@sportsiq.in', process.env.SUPERADMIN_PASSWORD ?? 'ChangeMe@123');
 const pan = await req('/vendor-portal/documents', { type: 'PAN', number: 'ABCDE1234F', fileUrl: face('PAN', 200) }, V2);
 const gst = await req('/vendor-portal/documents', { type: 'GST', number: '27ABCDE1234F1Z5', fileUrl: face('GST', 210), issuedOn: days(-400), expiresOn: days(5) }, V2);
 await req('/vendor-portal/documents', { type: 'INSURANCE', fileUrl: face('Ins', 220), expiresOn: days(25) }, V12);
