@@ -120,6 +120,14 @@ r.post('/opportunities/:oid/interest', requireRole('SPONSOR'), ah(async (req, re
     },
   });
   if (opp.status === 'OPEN') await prisma.sponsorshipOpportunity.update({ where: { id: opp.id }, data: { status: 'IN_DISCUSSION' } });
+  // Every marketplace enquiry becomes a CRM deal so nothing is lost
+  const sp = await prisma.sponsorProfile.findUnique({ where: { userId: u.id } });
+  await prisma.sponsorDeal.create({ data: {
+    leagueId: opp.leagueId, company: sp?.companyName ?? u.name, contactName: u.name, email: u.email, sponsorUserId: u.id, opportunityId: opp.id, value: opp.price,
+    stage: 'CONTACTED', source: 'MARKETPLACE', conversationId: convo.id, ownerId: opp.league.ownerId,
+    ownerName: (await prisma.user.findUnique({ where: { id: opp.league.ownerId }, select: { name: true } }))?.name ?? null,
+    activities: { create: { kind: 'EMAIL', body: `Enquiry via SportsIQ marketplace: ${message}`, authorName: u.name } },
+  } });
   await notify(await leagueManagers(opp.leagueId), `New sponsor interest in "${opp.title}"`, { body: `${u.name}: ${message.slice(0, 120)}`, link: `/messages/${convo.id}`, type: 'success' });
   res.status(201).json(convo);
 }));

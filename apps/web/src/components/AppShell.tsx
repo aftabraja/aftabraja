@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, BookOpenCheck, Building2, ChevronDown, CircleDollarSign, FileText, Handshake, LayoutDashboard, LogOut, Menu,
-  MessageSquare, Search, Settings, Shield, ShieldCheck, Store, Trophy, User as UserIcon, Users, UsersRound, Wallet, X, ScrollText, Megaphone, Presentation, FileSignature, Gavel, CalendarDays, Plane, ClipboardCheck, Ticket, IdCard, BarChart3, Star, Mail, ClipboardList, Shirt,
+  MessageSquare, Search, Settings, Shield, ShieldCheck, Store, Trophy, User as UserIcon, Users, UsersRound, Wallet, X, ScrollText, Megaphone, Presentation, FileSignature, Gavel, CalendarDays, Plane, ClipboardCheck, Ticket, IdCard, BarChart3, Star, Mail, ClipboardList, Shirt, CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { get, post } from '../lib/api';
@@ -53,6 +53,7 @@ function useNav(): { title?: string; items: NavItem[] }[] {
     case 'SPONSOR':
       return [{ title: 'Sponsor', items: [
         { to: '/sponsor', label: 'League Marketplace', icon: i(Trophy), end: true },
+        { to: '/sponsor/deals', label: 'My Sponsorships', icon: i(CheckCircle2) },
         { to: '/talent', label: 'Cricketers for Endorsement', icon: i(Star) },
         { to: '/sponsor/profile', label: 'Company Profile', icon: i(Building2) },
         { to: '/messages', label: 'Messages', icon: i(MessageSquare) }, { to: '/notifications', label: 'Notifications', icon: i(Bell) },
@@ -101,8 +102,9 @@ function leagueNav(id: string, league: any, i: (C: any) => ReactNode): { title?:
     ] },
     { title: 'Business', items: [
       { to: `${base}/procurement`, label: 'Procurement', icon: i(ClipboardList) },
-      { to: `${base}/sponsorships`, label: 'Sponsorships', icon: i(Megaphone) },
-      { to: `${base}/sponsors`, label: 'Find Sponsors', icon: i(Handshake) },
+      { to: `${base}/sponsorships`, label: 'Sponsorship Inventory', icon: i(Megaphone) },
+      { to: `${base}/crm`, label: 'Sponsor CRM', icon: i(Handshake) },
+      { to: `${base}/sponsors`, label: 'Find Sponsors', icon: i(Search) },
       { to: `${base}/finance`, label: 'Finance & P&L', icon: i(CircleDollarSign) },
       { to: `${base}/reports`, label: 'Reports', icon: i(BarChart3) },
       { to: `${base}/decks`, label: 'Deck Studio', icon: i(Presentation) },

@@ -52,3 +52,14 @@ test('work order milestones by category', () => {
   assert.equal(defaultMilestones('jersey-printing').length, 5);
   assert.equal(defaultMilestones('umpires').length, 2);
 });
+
+import { channelOf, quantityOf } from '../src/routes/crm.ts';
+
+test('sponsor deliverables: channel and quantity parsed from the package', () => {
+  assert.equal(channelOf('Logo on all jerseys (chest)'), 'JERSEY');
+  assert.equal(channelOf('LED exposure every match'), 'ON_GROUND');
+  assert.equal(channelOf('10 Instagram reels'), 'DIGITAL');
+  assert.equal(channelOf('Commentator mentions'), 'BROADCAST');
+  assert.equal(quantityOf('10 Instagram reels'), 10);
+  assert.equal(quantityOf('Trophy branding'), 1);
+});

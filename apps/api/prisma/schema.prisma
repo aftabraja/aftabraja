@@ -1054,3 +1054,56 @@ model JerseyDesign {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
+
+// ======================= Sponsorship CRM =======================
+
+model SponsorDeal {
+  id            String    @id @default(cuid())
+  leagueId      String
+  company       String
+  contactName   String?
+  email         String?
+  phone         String?
+  sponsorUserId String? // when the sponsor is on SportsIQ
+  opportunityId String?
+  value         Int       @default(0)
+  stage         String    @default("LEAD") // LEAD, CONTACTED, PROPOSAL, NEGOTIATION, WON, LOST
+  expectedClose DateTime?
+  ownerId       String?
+  ownerName     String?
+  lostReason    String?
+  source        String    @default("MANUAL") // MANUAL, MARKETPLACE
+  conversationId String?
+  contractId    String?
+  deckId        String?
+  wonAt         DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  activities    DealActivity[]
+  deliverables  SponsorDeliverable[]
+}
+
+model DealActivity {
+  id         String      @id @default(cuid())
+  dealId     String
+  deal       SponsorDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  kind       String // NOTE, CALL, EMAIL, MEETING, STAGE, DOCUMENT
+  body       String
+  authorName String
+  createdAt  DateTime    @default(now())
+}
+
+model SponsorDeliverable {
+  id         String      @id @default(cuid())
+  leagueId   String
+  dealId     String
+  deal       SponsorDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  title      String
+  channel    String      @default("OTHER") // JERSEY, ON_GROUND, BROADCAST, DIGITAL, HOSPITALITY, OTHER
+  quantity   Int         @default(1)
+  delivered  Int         @default(0)
+  dueDate    DateTime?
+  proofs     String[]    @default([])
+  notes      String?
+  updatedAt  DateTime    @updatedAt
+}

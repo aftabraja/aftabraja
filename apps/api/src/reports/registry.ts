@@ -173,6 +173,25 @@ export const REPORTS: ReportDef[] = [
     },
   },
   {
+    key: 'sponsor-pipeline', title: 'Sponsorship Pipeline', group: 'Commercial',
+    description: 'Every sponsor deal by stage with value, probability, owner and expected close.',
+    run: async (id) => {
+      const prob: Record<string, number> = { LEAD: 10, CONTACTED: 25, PROPOSAL: 50, NEGOTIATION: 75, WON: 100, LOST: 0 };
+      const deals = await prisma.sponsorDeal.findMany({ where: { leagueId: id }, orderBy: [{ stage: 'asc' }, { value: 'desc' }] });
+      return { columns: [{ key: 'company', label: 'Sponsor', width: 26 }, { key: 'stage', label: 'Stage' }, { key: 'value', label: 'Value', type: 'money', total: true }, { key: 'probability', label: 'Probability', type: 'percent' }, { key: 'weighted', label: 'Weighted', type: 'money', total: true }, { key: 'ownerName', label: 'Owner' }, { key: 'expectedClose', label: 'Expected close', type: 'date' }, { key: 'source', label: 'Source' }],
+        rows: deals.map((d) => ({ ...d, probability: prob[d.stage], weighted: d.stage === 'LOST' ? 0 : Math.round((d.value * prob[d.stage]) / 100) })) };
+    },
+  },
+  {
+    key: 'sponsor-deliverables', title: 'Sponsor Deliverables Tracker', group: 'Commercial',
+    description: 'Every promised deliverable per sponsor with delivered count, proof and status.',
+    run: async (id) => {
+      const ds = await prisma.sponsorDeliverable.findMany({ where: { leagueId: id }, include: { deal: { select: { company: true } } }, orderBy: [{ dealId: 'asc' }, { title: 'asc' }] });
+      return { columns: [{ key: 'sponsor', label: 'Sponsor', width: 24 }, { key: 'title', label: 'Deliverable', width: 36 }, { key: 'channel', label: 'Channel' }, { key: 'quantity', label: 'Promised', type: 'number', total: true }, { key: 'delivered', label: 'Delivered', type: 'number', total: true }, { key: 'status', label: 'Status' }, { key: 'proofs', label: 'Proofs', type: 'number' }, { key: 'dueDate', label: 'Due', type: 'date' }],
+        rows: ds.map((x) => ({ ...x, sponsor: x.deal.company, proofs: x.proofs.length, status: x.delivered >= x.quantity ? 'COMPLETE' : x.delivered > 0 ? 'IN PROGRESS' : 'PENDING' })) };
+    },
+  },
+  {
     key: 'ticket-sales', title: 'Ticket Sales Summary', group: 'Commercial',
     description: 'Capacity, sold, occupancy, revenue and gate entries per ticket category.',
     run: async (id) => {

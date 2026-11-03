@@ -260,4 +260,33 @@ await req(`${P}/procurement/work-orders/${jwo.workOrderId}/milestones/1`, {}, T)
 await req(`/vendor-portal/work-orders/${jwo.workOrderId}/milestones/2`, {}, V2);
 console.log('jersey: design approved, printer awarded, sample approved, bulk production underway');
 void bad;
+
+// ---- Sponsor CRM: marketplace enquiry → deal → won → deliverables with proof ----
+const SP2 = await login('sponsor2@demo.sportsiq.in');
+const mk = await req('/sponsors/marketplace', null, SP2);
+const powered = mk.find((l) => l.id === L.id).opportunities.find((o) => o.title === 'Powered By Partner');
+await req(`/sponsors/opportunities/${powered.id}/interest`, { message: 'ZipPay is interested in the Powered By package for CLT10. Please share audience numbers.' }, SP2);
+const crm0 = await req(`${P}/crm`, null, T);
+assert(crm0.deals.some((x) => x.source === 'MARKETPLACE'), 'marketplace enquiries become CRM deals');
+const titleOpp = crm0.opportunities.find((o) => o.title === 'Title Sponsor');
+const deal = await req(`${P}/crm/deals`, { company: 'Velocity Motors', contactName: 'Neha Sharma', email: 'neha@example.com', opportunityId: titleOpp.id, stage: 'CONTACTED', expectedClose: days(15) }, T);
+await req(`${P}/crm/deals/${deal.id}/activities`, { kind: 'MEETING', body: 'Met marketing head; wants naming rights + jersey front. Sending deck.' }, T);
+await req(`${P}/crm/deals/${deal.id}/documents`, { kind: 'DECK' }, T);
+await req(`${P}/crm/deals/${deal.id}`, { stage: 'PROPOSAL' }, T, 'PATCH');
+await req(`${P}/crm/deals/${deal.id}`, { stage: 'NEGOTIATION' }, T, 'PATCH');
+await req(`${P}/crm/deals/${deal.id}/documents`, { kind: 'CONTRACT' }, T);
+const wonDeal = await req(`${P}/crm/deals/${deal.id}/win`, { value: 4800000, addReceivable: true, dueDate: days(30) }, T);
+assert(wonDeal.deliverables.length >= 5, 'deliverables created from the package');
+const dv = wonDeal.deliverables.find((x) => /social posts/.test(x.title)) ?? wonDeal.deliverables[0];
+let noProof = false;
+try { await req(`${P}/crm/deliverables/${dv.id}`, { delivered: dv.quantity }, T, 'PATCH'); } catch { noProof = true; }
+assert(noProof, 'deliverable cannot be completed without proof');
+await req(`${P}/crm/deliverables/${dv.id}`, { delivered: Math.min(dv.quantity, 6), addProofs: [face('Post proof', 30)] }, T, 'PATCH');
+const jer = wonDeal.deliverables.find((x) => x.channel === 'JERSEY');
+if (jer) await req(`${P}/crm/deliverables/${jer.id}`, { delivered: 1, addProofs: [face('Jersey proof', 60)] }, T, 'PATCH');
+// a lost deal for realistic win rate
+const lostDeal = await req(`${P}/crm/deals`, { company: 'ByteLearn EdTech', opportunityId: crm0.opportunities.find((o) => o.title === 'Official Digital Partner').id, stage: 'PROPOSAL' }, T);
+await req(`${P}/crm/deals/${lostDeal.id}`, { stage: 'LOST', lostReason: 'Budget' }, T, 'PATCH');
+const crm1 = await req(`${P}/crm`, null, T);
+console.log('crm: pipeline', crm1.summary.pipeline, 'won', crm1.summary.won, 'win rate', crm1.summary.winRate + '%');
 console.log('DEMO SEASON OK');
