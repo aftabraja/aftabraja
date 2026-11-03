@@ -1,0 +1,419 @@
+// SportsIQ data model
+// Multi-sport ready: League.sport is free text today, enum-able later.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  LEAGUE_OWNER
+  LEAGUE_STAFF
+  TEAM_OWNER
+  PLAYER
+  VENDOR
+  SPONSOR
+}
+
+enum LeagueStatus {
+  DRAFT
+  PLANNING
+  REGISTRATION_OPEN
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum StepStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+  SKIPPED
+}
+
+enum RegistrationStatus {
+  APPLIED
+  SHORTLISTED
+  REJECTED
+  SOLD
+  UNSOLD
+}
+
+enum OpportunityStatus {
+  OPEN
+  IN_DISCUSSION
+  SOLD
+  CLOSED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         Role
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedLeagues      League[]             @relation("LeagueOwner")
+  leagueMemberships LeagueMember[]
+  teamOwnerships    TeamOwner[]
+  playerProfile     PlayerProfile?
+  vendorProfile     VendorProfile?
+  sponsorProfile    SponsorProfile?
+  notifications     Notification[]
+  participants      ConversationParticipant[]
+  messages          Message[]
+  subscriptions     Subscription[]
+  auditLogs         AuditLog[]
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan      String // LEAGUE_OWNER, TEAM_OWNER, VENDOR, SPONSOR, PLAYER
+  amount    Int // INR
+  status    String   @default("TRIAL") // TRIAL, ACTIVE, EXPIRED
+  validTill DateTime
+  createdAt DateTime @default(now())
+}
+
+model League {
+  id          String       @id @default(cuid())
+  name        String
+  shortCode   String?
+  slug        String       @unique
+  sport       String       @default("Cricket")
+  format      String? // T10, T20, ODI, Indoor, Corporate
+  category    String? // Open, Corporate, Celebrity, State, School
+  city        String?
+  country     String       @default("India")
+  description String?
+  logoUrl     String?
+  primaryColor String?     @default("#1d4ed8")
+  startDate   DateTime?
+  endDate     DateTime?
+  numTeams    Int          @default(0)
+  teamPurse   Int? // INR
+  status      LeagueStatus @default(DRAFT)
+  isPublic    Boolean      @default(true)
+  ownerId     String
+  owner       User         @relation("LeagueOwner", fields: [ownerId], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  members       LeagueMember[]
+  teams         Team[]
+  stepProgress  LeagueStepProgress[]
+  registrations PlayerRegistration[]
+  opportunities SponsorshipOpportunity[]
+  expenses      Expense[]
+  incomes       Income[]
+  budgets       BudgetLine[]
+  conversations Conversation[]
+  decks         Deck[]
+  contracts     Contract[]
+}
+
+model LeagueMember {
+  id         String   @id @default(cuid())
+  leagueId   String
+  league     League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department String // Operations, Finance, Marketing, Legal, Cricket Operations, Branding, Commercial, Logistics, Admin
+  title      String?
+  createdAt  DateTime @default(now())
+
+  @@unique([leagueId, userId])
+}
+
+model LeagueStepProgress {
+  id          String     @id @default(cuid())
+  leagueId    String
+  league      League     @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  stepKey     String
+  status      StepStatus @default(NOT_STARTED)
+  notes       String?
+  attachments String[]   @default([])
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([leagueId, stepKey])
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  leagueId  String
+  league    League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  name      String
+  shortName String?
+  city      String?
+  logoUrl   String?
+  color     String?
+  purse     Int?
+  franchiseFee Int?
+  createdAt DateTime @default(now())
+
+  owners  TeamOwner[]
+  players PlayerRegistration[]
+}
+
+model TeamOwner {
+  id       String @id @default(cuid())
+  teamId   String
+  team     Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sharePct Float  @default(100)
+
+  @@unique([teamId, userId])
+}
+
+model PlayerProfile {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dob          DateTime?
+  city         String?
+  state        String?
+  playingRole  String? // Batter, Bowler, All-rounder, Wicket-keeper
+  battingStyle String?
+  bowlingStyle String?
+  bio          String?
+  matches      Int       @default(0)
+  runs         Int       @default(0)
+  wickets      Int       @default(0)
+  videoUrl     String?
+  createdAt    DateTime  @default(now())
+
+  registrations PlayerRegistration[]
+}
+
+model PlayerRegistration {
+  id         String             @id @default(cuid())
+  leagueId   String
+  league     League             @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  playerId   String
+  player     PlayerProfile      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  status     RegistrationStatus @default(APPLIED)
+  category   String? // Icon, A, B, C, Emerging
+  basePrice  Int?
+  soldPrice  Int?
+  teamId     String?
+  team       Team?              @relation(fields: [teamId], references: [id])
+  createdAt  DateTime           @default(now())
+
+  @@unique([leagueId, playerId])
+}
+
+model VendorCategory {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  group       String
+  suggestions String[] @default([])
+
+  services VendorService[]
+}
+
+model VendorProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName  String
+  description  String?
+  city         String?
+  state        String?
+  serviceAreas String[] @default([])
+  gstNumber    String?
+  website      String?
+  phone        String?
+  yearsInBusiness Int?
+  rating       Float    @default(0)
+  reviewCount  Int      @default(0)
+  verified     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  services VendorService[]
+  expenses Expense[]
+}
+
+model VendorService {
+  id          String         @id @default(cuid())
+  vendorId    String
+  vendor      VendorProfile  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    VendorCategory @relation(fields: [categoryId], references: [id])
+  title       String
+  description String?
+  priceMin    Int?
+  priceMax    Int?
+  unit        String? // per match, per day, per piece, per event, lump sum
+  createdAt   DateTime       @default(now())
+
+  @@index([categoryId])
+}
+
+model SponsorProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName String
+  industry    String?
+  website     String?
+  city        String?
+  description String?
+  budgetMin   Int?
+  budgetMax   Int?
+  createdAt   DateTime @default(now())
+}
+
+model SponsorshipOpportunity {
+  id           String            @id @default(cuid())
+  leagueId     String
+  league       League            @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  title        String
+  tier         String // Title, Powered By, Associate, Jersey, On-ground, Broadcast, Digital, Hospitality
+  description  String?
+  price        Int
+  deliverables String[]          @default([])
+  slots        Int               @default(1)
+  status       OpportunityStatus @default(OPEN)
+  createdAt    DateTime          @default(now())
+}
+
+model BudgetLine {
+  id       String @id @default(cuid())
+  leagueId String
+  league   League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  category String
+  planned  Int
+
+  @@unique([leagueId, category])
+}
+
+model Expense {
+  id          String        @id @default(cuid())
+  leagueId    String
+  league      League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  category    String
+  description String
+  amount      Int
+  date        DateTime      @default(now())
+  status      PaymentStatus @default(PENDING)
+  vendorId    String?
+  vendor      VendorProfile? @relation(fields: [vendorId], references: [id])
+  payee       String?
+  createdAt   DateTime      @default(now())
+}
+
+model Income {
+  id          String        @id @default(cuid())
+  leagueId    String
+  league      League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  source      String // Franchise Fee, Sponsorship, Broadcast, Ticketing, Merchandise, Registration Fee, Other
+  description String
+  amount      Int
+  date        DateTime      @default(now())
+  status      PaymentStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  subject   String?
+  leagueId  String?
+  league    League?  @relation(fields: [leagueId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages     Message[]
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  createdAt      DateTime     @default(now())
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String?
+  link      String?
+  type      String    @default("info") // info, success, warning, alert
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+
+model Deck {
+  id        String   @id @default(cuid())
+  leagueId  String
+  league    League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  type      String // sponsorship, franchise, concept, broadcast, investor
+  title     String
+  audience  String? // e.g. sponsor name for a per-sponsor version
+  slides    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Contract {
+  id             String    @id @default(cuid())
+  leagueId       String
+  league         League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  templateKey    String
+  title          String
+  counterparty   String?
+  body           String
+  status         String    @default("DRAFT") // DRAFT, UNDER_LEGAL_REVIEW, SENT, SIGNED, ARCHIVED
+  acknowledgedAt DateTime? // user confirmed the "verify with a lawyer" notice
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
