@@ -855,3 +855,33 @@ model EmailLog {
   error     String?
   createdAt DateTime @default(now())
 }
+
+// ======================= Tax invoices (platform subscriptions) =======================
+
+model Invoice {
+  id          String   @id @default(cuid())
+  number      String   @unique // e.g. SIQ/2026-27/00001
+  userId      String
+  paymentId   String?  @unique
+  description String
+  sac         String
+  taxable     Int // paise-free INR
+  cgst        Int      @default(0)
+  sgst        Int      @default(0)
+  igst        Int      @default(0)
+  total       Int
+  billName    String
+  billGstin   String?
+  billState   String
+  billAddress String?
+  issuedAt    DateTime @default(now())
+}
+
+model BillingProfile {
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  name     String
+  gstin    String?
+  state    String
+  address  String?
+}

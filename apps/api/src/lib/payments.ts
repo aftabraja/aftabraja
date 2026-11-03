@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { prisma } from './prisma.js';
 import { HttpError } from './http.js';
 import { notify } from './notify.js';
+import { issueSubscriptionInvoice } from './invoice.js';
 
 /**
  * Payments: Razorpay when RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are set, otherwise a clearly
@@ -63,6 +64,7 @@ async function fulfil(paymentId: string) {
   if (p.purpose === 'SUBSCRIPTION' && p.refId) {
     const validTill = new Date(); validTill.setFullYear(validTill.getFullYear() + 1);
     const sub = await prisma.subscription.update({ where: { id: p.refId }, data: { status: 'ACTIVE', validTill } });
-    await notify(sub.userId, 'Payment received — your SportsIQ plan is active', { type: 'success', link: '/account' });
+    const inv = await issueSubscriptionInvoice(p.id);
+    await notify(sub.userId, `Payment received — your SportsIQ plan is active (invoice ${inv.number})`, { type: 'success', link: '/account' });
   }
 }

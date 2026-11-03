@@ -9,6 +9,7 @@ import { audit, leagueManagers, notify } from '../lib/notify.js';
 import { publish } from '../lib/realtime.js';
 import { standings } from '../lib/standings.js';
 import { computeResult, matchView, teamSel } from '../lib/matchView.js';
+import { roundRobin } from '../lib/schedule.js';
 
 /** Venues, fixtures, auto-scheduler, playoffs, standings and ball-by-ball scoring. Mounted at /api/leagues/:leagueId */
 const r = Router({ mergeParams: true });
@@ -85,25 +86,6 @@ const schedSchema = z.object({
   replace: z.boolean().default(true),
 });
 
-export function roundRobin(teamIds: string[], rounds: number) {
-  const t = [...teamIds];
-  if (t.length % 2) t.push('BYE');
-  const n = t.length;
-  const pairs: [string, string][] = [];
-  for (let leg = 0; leg < rounds; leg++) {
-    const arr = [...t];
-    for (let round = 0; round < n - 1; round++) {
-      for (let i = 0; i < n / 2; i++) {
-        const a = arr[i], b = arr[n - 1 - i];
-        if (a === 'BYE' || b === 'BYE') continue;
-        const home = (round + i + leg) % 2 === 0;
-        pairs.push(home ? [a, b] : [b, a]);
-      }
-      arr.splice(1, 0, arr.pop()!);
-    }
-  }
-  return pairs;
-}
 
 r.post('/schedule/generate', ah(async (req, res) => {
   const leagueId = req.params.leagueId;

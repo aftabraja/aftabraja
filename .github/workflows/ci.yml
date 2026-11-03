@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sportsiq
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sportsiq?schema=public
+      JWT_SECRET: ci-secret
+      SUPERADMIN_EMAIL: admin@sportsiq.in
+      SUPERADMIN_PASSWORD: ChangeMe@123
+      DISABLE_RATE_LIMIT: 'true'
+      PAYMENTS_TEST_MODE: 'true'
+      PORT: 4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Database
+        working-directory: apps/api
+        run: npx prisma migrate deploy && npm run db:seed
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        working-directory: apps/api
+        run: npm test
+      - name: Build web
+        working-directory: apps/web
+        run: npx vite build
+      - name: Start API
+        working-directory: apps/api
+        run: |
+          npx tsx src/index.ts > api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:4000/api/health && break; sleep 1; done
+      - name: Integration — full demo season
+        working-directory: apps/api
+        run: node scripts/demo-season.mjs
+      - name: API log on failure
+        if: failure()
+        working-directory: apps/api
+        run: tail -100 api.log

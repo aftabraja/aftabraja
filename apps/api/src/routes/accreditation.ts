@@ -293,7 +293,7 @@ publicAccreditation.post('/:slug', ah(async (req, res) => {
   if (!cfg.selfApplyOpen) throw new HttpError(403, 'Accreditation applications are closed');
   const d = z.object({
     categoryId: z.string(), name: z.string().min(2), organisation: z.string().min(2), designation: z.string().min(2),
-    email: z.string().email(), phone: z.string().min(8), photoUrl: z.string().startsWith('data:image/'), idType: z.string().min(2), idNumber: z.string().min(4),
+    email: z.string().email(), phone: z.string().min(8), photoUrl: z.string().regex(/^(\/files\/|https:\/\/)/, 'Please upload a photo'), idType: z.string().min(2), idNumber: z.string().min(4),
     consent: z.literal(true, { errorMap: () => ({ message: 'You must accept the terms and data consent' }) }),
   }).parse(req.body);
   const cat = await prisma.accredCategory.findFirst({ where: { id: d.categoryId, leagueId: l.id, selfApply: true } });

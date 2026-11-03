@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, MessageSquare, Send } from 'lucide-react';
-import { get, post } from '../lib/api';
+import { api, get, post } from '../lib/api';
 import { checkout } from '../lib/pay';
 import { download } from '../lib/download';
 import { useAuth } from '../lib/auth';
@@ -123,7 +123,6 @@ export function Account() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const delReq = useMutation({ mutationFn: () => post('/auth/me/delete-request') });
-  const pay = useMutation({ mutationFn: async () => checkout(await post('/payments/subscription')), onSuccess: () => { qc.invalidateQueries(); window.location.reload(); } });
   const [pw, setPw] = useState({ current: '', next: '' });
   const change = useMutation({ mutationFn: () => post('/auth/change-password', pw), onSuccess: () => setPw({ current: '', next: '' }) });
   const sub = user?.subscriptions?.[0];
@@ -139,15 +138,10 @@ export function Account() {
             <div><p className="text-sm text-ink-500">{ROLE_LABEL[sub.plan] ?? sub.plan} plan</p><p className="text-2xl font-bold">{sub.amount ? inr(sub.amount) : 'Free'}</p><p className="text-xs text-ink-500">Valid till {date(sub.validTill)}</p></div>
             <StatusBadge status={sub.status} />
           </div>
-          {sub.status !== 'ACTIVE' && sub.amount > 0 && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-              <span>{sub.status === 'TRIAL' ? "You're on a free trial." : 'Your plan has expired.'} Activate your plan to keep full access.</span>
-              <Button size="sm" loading={pay.isPending} onClick={() => pay.mutate()}>Pay {inr(sub.amount)}</Button>
-            </div>
-          )}
-          <ErrorText error={pay.error} />
+          {sub.status !== 'ACTIVE' && sub.amount > 0 && <PayPlan amount={sub.amount} onPaid={() => { qc.invalidateQueries(); window.location.reload(); }} />}
         </Card>
       )}
+      <Invoices />
       <Card title="Change password">
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <Field label="Current password"><Input type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></Field>
@@ -164,5 +158,63 @@ export function Account() {
         </div>
       </Card>
     </div>
+  );
+}
+
+function PayPlan({ amount, onPaid }: { amount: number; onPaid: () => void }) {
+  const b = useQuery({ queryKey: ['billing'], queryFn: () => get('/payments/billing') });
+  const cfg = useQuery({ queryKey: ['pay-config'], queryFn: () => get('/payments/config') });
+  const [f, setF] = useState<any>(null);
+  const save = useMutation({ mutationFn: () => api('/payments/billing', { method: 'PUT', body: f }), onSuccess: () => { setF(null); b.refetch(); } });
+  const pay = useMutation({ mutationFn: async () => checkout(await post('/payments/subscription')), onSuccess: onPaid });
+  if (b.isLoading || cfg.isLoading) return null;
+  const p = b.data.profile;
+  const intra = p && p.state === cfg.data.platformState;
+  const gst = Math.round((amount * cfg.data.gstRate) / 100);
+  if (!p || f) {
+    const v = f ?? { name: '', gstin: '', state: cfg.data.platformState, address: '' };
+    return (
+      <div className="mt-4 space-y-3 rounded-xl border border-ink-200 p-4">
+        <p className="text-sm font-semibold">Billing details for your GST invoice</p>
+        <ErrorText error={save.error} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Name / company"><Input value={v.name} onChange={(e) => setF({ ...v, name: e.target.value })} /></Field>
+          <Field label="GSTIN (optional)" hint="Add it to claim input tax credit"><Input value={v.gstin ?? ''} onChange={(e) => setF({ ...v, gstin: e.target.value.toUpperCase() })} maxLength={15} /></Field>
+          <Field label="State"><select className="input" value={v.state} onChange={(e) => setF({ ...v, state: e.target.value })}>{b.data.states.map((s: string) => <option key={s}>{s}</option>)}</select></Field>
+          <Field label="Address"><Input value={v.address ?? ''} onChange={(e) => setF({ ...v, address: e.target.value })} /></Field>
+        </div>
+        <Button loading={save.isPending} disabled={!v.name} onClick={() => { setF(v); save.mutate(); }}>Save billing details</Button>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold">Activate your plan</p>
+          <p className="mt-1">Plan {inr(amount)} + GST {cfg.data.gstRate}% ({intra ? `CGST ${cfg.data.gstRate / 2}% + SGST ${cfg.data.gstRate / 2}%` : `IGST ${cfg.data.gstRate}%`}) {inr(gst)} = <b>{inr(amount + gst)}</b></p>
+          <p className="mt-1 text-xs">Billed to {p.name}{p.gstin ? ` · GSTIN ${p.gstin}` : ''} · {p.state} <button className="ml-1 font-semibold underline" onClick={() => setF({ ...p, gstin: p.gstin ?? '', address: p.address ?? '' })}>Edit</button></p>
+        </div>
+        <Button loading={pay.isPending} onClick={() => pay.mutate()}>Pay {inr(amount + gst)}</Button>
+      </div>
+      <ErrorText error={pay.error} />
+    </div>
+  );
+}
+
+function Invoices() {
+  const inv = useQuery({ queryKey: ['invoices'], queryFn: () => get<any[]>('/payments/invoices') });
+  if (!inv.data?.length) return null;
+  return (
+    <Card title="Invoices" padded={false}>
+      <ul className="divide-y divide-ink-100">
+        {inv.data.map((i) => (
+          <li key={i.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+            <span><b>{i.number}</b> <span className="text-ink-500">· {date(i.issuedAt)} · {i.description}</span></span>
+            <span className="flex items-center gap-3"><b>{inr(i.total)}</b><Button size="sm" variant="secondary" onClick={() => download(`/payments/invoices/${i.id}/pdf`, `${i.number}.pdf`)}>PDF</Button></span>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
