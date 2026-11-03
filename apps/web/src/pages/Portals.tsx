@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { VendorPortfolio, VendorReviews, VendorRfqs, VendorWorkOrders } from './VendorWork';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BadgeCheck, CalendarDays, CheckCircle2, MapPin, Pencil, Plus, Star, Trash2, Trophy } from 'lucide-react';
 import { del, get, patch, post } from '../lib/api';
 import { date, dateInput, inr, inrShort } from '../lib/format';
-import { Avatar, Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Progress, Select, Spinner, Stat, StatusBadge, Table, Textarea } from '../components/ui';
+import { Avatar, Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Progress, Select, Spinner, Stat, StatusBadge, Table, Tabs, Textarea } from '../components/ui';
 import { useCategories } from '../components/VendorPanel';
 
 /* ---------------- Vendor portal ---------------- */
 export function VendorHome() {
   const qc = useQueryClient();
   const v = useQuery({ queryKey: ['my-vendor'], queryFn: () => get('/vendors/me/profile') });
+  const [params, setParams] = useSearchParams();
+  const [tab, setTab] = useState<'profile' | 'rfqs' | 'work' | 'portfolio' | 'reviews'>((params.get('tab') as any) ?? 'profile');
   const [f, setF] = useState<any>(null);
   const [svc, setSvc] = useState<any>(null);
   useEffect(() => { if (v.data && !f) setF({ ...v.data, serviceAreas: v.data.serviceAreas.join(', ') }); }, [v.data, f]);
@@ -19,6 +23,12 @@ export function VendorHome() {
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
   return (
     <>
+      <Tabs value={tab} onChange={(t) => { setTab(t); setParams(t === 'profile' ? {} : { tab: t }); }} tabs={[{ value: 'profile', label: 'Profile & services' }, { value: 'rfqs', label: 'Quote requests' }, { value: 'work', label: 'Work orders' }, { value: 'portfolio', label: 'Portfolio' }, { value: 'reviews', label: 'Reviews' }]} />
+      {tab === 'rfqs' && <VendorRfqs />}
+      {tab === 'work' && <VendorWorkOrders />}
+      {tab === 'portfolio' && <VendorPortfolio />}
+      {tab === 'reviews' && <VendorReviews />}
+      {tab === 'profile' && <>
       <PageHeader title={<span className="flex items-center gap-2">{v.data.companyName}{v.data.verified && <BadgeCheck className="h-6 w-6 text-brand-600" />}</span>} subtitle="Your profile and services are visible to every league on SportsIQ." actions={<Button onClick={() => setSvc({})}><Plus className="h-4 w-4" />Add service</Button>} />
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Stat label="Services listed" value={v.data.services.length} />
@@ -54,6 +64,7 @@ export function VendorHome() {
         </Card>
       </div>
       {svc && <ServiceModal svc={svc} onClose={() => { setSvc(null); qc.invalidateQueries({ queryKey: ['my-vendor'] }); }} />}
+      </>}
     </>
   );
 }

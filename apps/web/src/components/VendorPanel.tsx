@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { ArrowLeft, BadgeCheck, MapPin, MessageSquare, Search, Star, X, Store } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, MapPin, MessageSquare, Search, Send, Star, X, Store } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { get, post } from '../lib/api';
 import { inr } from '../lib/format';
 import { Avatar, Badge, Button, Empty, Spinner, Textarea, cx } from './ui';
@@ -144,8 +145,33 @@ function VendorDetail({ id, leagueId, onBack }: { id: string; leagueId?: string;
             ))}
           </div>
         </div>
+        {leagueId && (
+          <Link to={`/leagues/${leagueId}/procurement?new=1&category=${d.services[0]?.category.slug ?? ''}&vendor=${d.id}`} className="flex items-center justify-center gap-2 rounded-lg bg-brand-700 py-2.5 text-sm font-semibold text-white hover:bg-brand-800"><Send className="h-4 w-4" />Request a formal quote</Link>
+        )}
+        {d._count?.workOrders > 0 && <p className="text-center text-xs text-ink-500">{d._count.workOrders} jobs completed through SportsIQ</p>}
+        {d.portfolio?.length > 0 && (
+          <div>
+            <p className="label">Portfolio</p>
+            <div className="grid grid-cols-3 gap-2">{d.portfolio.map((p: any) => (
+              <a key={p.id} href={p.imageUrl ?? p.videoUrl ?? '#'} target="_blank" rel="noreferrer" title={p.title} className="group block overflow-hidden rounded-lg border border-ink-200">
+                {p.imageUrl ? <img src={p.imageUrl} alt={p.title} className="h-20 w-full object-cover" /> : <div className="flex h-20 items-center justify-center bg-ink-50 text-[10px] text-ink-500">{p.title}</div>}
+              </a>
+            ))}</div>
+          </div>
+        )}
+        {d.reviews?.length > 0 && (
+          <div>
+            <p className="label">Reviews from leagues</p>
+            <ul className="space-y-2">{d.reviews.map((r: any) => (
+              <li key={r.id} className="rounded-lg border border-ink-200 p-3 text-xs">
+                <p className="flex justify-between"><b>{r.leagueName}</b><span className="flex items-center gap-1"><Star className="h-3 w-3 fill-amber-400 text-amber-400" />{((r.quality + r.onTime + r.value) / 3).toFixed(1)}</span></p>
+                {r.comment && <p className="mt-1 text-ink-700">“{r.comment}”</p>}
+              </li>
+            ))}</ul>
+          </div>
+        )}
         <div className="card p-4">
-          <p className="mb-2 flex items-center gap-2 text-sm font-semibold"><MessageSquare className="h-4 w-4 text-brand-700" />Contact {d.companyName}</p>
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold"><MessageSquare className="h-4 w-4 text-brand-700" />Message {d.companyName}</p>
           {send.isSuccess ? (
             <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">Message sent. You'll find the conversation in Messages.</p>
           ) : (

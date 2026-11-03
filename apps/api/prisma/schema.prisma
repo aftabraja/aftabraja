@@ -272,6 +272,11 @@ model VendorProfile {
 
   services VendorService[]
   expenses Expense[]
+  rfqInvites RfqInvite[]
+  quotes     Quote[]
+  workOrders WorkOrder[]
+  reviews    VendorReview[]
+  portfolio  PortfolioItem[]
 }
 
 model VendorService {
@@ -884,4 +889,130 @@ model BillingProfile {
   gstin    String?
   state    String
   address  String?
+}
+
+// ======================= Procurement: RFQ → quotes → work orders → reviews =======================
+
+model Rfq {
+  id          String    @id @default(cuid())
+  leagueId    String
+  number      Int
+  title       String
+  categorySlug String
+  specs       String
+  quantity    String?
+  location    String?
+  neededBy    DateTime?
+  budgetMax   Int?
+  attachments String[]  @default([])
+  status      String    @default("OPEN") // OPEN, AWARDED, CLOSED, CANCELLED
+  createdById String
+  createdAt   DateTime  @default(now())
+  invites     RfqInvite[]
+  quotes      Quote[]
+
+  @@unique([leagueId, number])
+}
+
+model RfqInvite {
+  id        String   @id @default(cuid())
+  rfqId     String
+  rfq       Rfq      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  vendorId  String
+  vendor    VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  declined  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([rfqId, vendorId])
+}
+
+model Quote {
+  id          String   @id @default(cuid())
+  rfqId       String
+  rfq         Rfq      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  vendorId    String
+  vendor      VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  amount      Int
+  gstAmount   Int      @default(0)
+  timeline    String
+  terms       String?
+  validTill   DateTime?
+  attachments String[] @default([])
+  status      String   @default("SUBMITTED") // SUBMITTED, ACCEPTED, REJECTED, WITHDRAWN
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([rfqId, vendorId])
+}
+
+model WorkOrder {
+  id           String    @id @default(cuid())
+  leagueId     String
+  number       Int
+  vendorId     String
+  vendor       VendorProfile @relation(fields: [vendorId], references: [id])
+  rfqId        String?
+  quoteId      String?   @unique
+  title        String
+  scope        String
+  deliverables String[]  @default([])
+  location     String?
+  contactPerson String?
+  startDate    DateTime?
+  dueDate      DateTime?
+  amount       Int
+  gstAmount    Int       @default(0)
+  status       String    @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, UNDER_REVIEW, COMPLETED, CANCELLED
+  completedAt  DateTime?
+  expenseId    String?
+  contractId   String?
+  createdById  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  updates      WorkOrderUpdate[]
+  review       VendorReview?
+
+  @@unique([leagueId, number])
+}
+
+model WorkOrderUpdate {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  authorId    String
+  authorName  String
+  side        String // LEAGUE, VENDOR
+  kind        String // COMMENT, PROOF, STATUS, REVISION
+  body        String?
+  attachments String[]  @default([])
+  status      String?
+  createdAt   DateTime  @default(now())
+}
+
+model VendorReview {
+  id          String    @id @default(cuid())
+  vendorId    String
+  vendor      VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  leagueId    String
+  leagueName  String
+  workOrderId String    @unique
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  quality     Int
+  onTime      Int
+  value       Int
+  comment     String?
+  authorId    String
+  createdAt   DateTime  @default(now())
+}
+
+model PortfolioItem {
+  id          String   @id @default(cuid())
+  vendorId    String
+  vendor      VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  title       String
+  client      String?
+  description String?
+  imageUrl    String?
+  videoUrl    String?
+  createdAt   DateTime @default(now())
 }

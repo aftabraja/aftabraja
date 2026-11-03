@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, BookOpenCheck, Building2, ChevronDown, CircleDollarSign, FileText, Handshake, LayoutDashboard, LogOut, Menu,
-  MessageSquare, Search, Settings, Shield, ShieldCheck, Store, Trophy, User as UserIcon, Users, UsersRound, Wallet, X, ScrollText, Megaphone, Presentation, FileSignature, Gavel, CalendarDays, Plane, ClipboardCheck, Ticket, IdCard, BarChart3, Star, Mail,
+  MessageSquare, Search, Settings, Shield, ShieldCheck, Store, Trophy, User as UserIcon, Users, UsersRound, Wallet, X, ScrollText, Megaphone, Presentation, FileSignature, Gavel, CalendarDays, Plane, ClipboardCheck, Ticket, IdCard, BarChart3, Star, Mail, ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { get, post } from '../lib/api';
@@ -98,6 +98,7 @@ function leagueNav(id: string, league: any, i: (C: any) => ReactNode): { title?:
       { to: `${base}/tickets`, label: 'Ticketing', icon: i(Ticket) },
     ] },
     { title: 'Business', items: [
+      { to: `${base}/procurement`, label: 'Procurement', icon: i(ClipboardList) },
       { to: `${base}/sponsorships`, label: 'Sponsorships', icon: i(Megaphone) },
       { to: `${base}/sponsors`, label: 'Find Sponsors', icon: i(Handshake) },
       { to: `${base}/finance`, label: 'Finance & P&L', icon: i(CircleDollarSign) },

@@ -96,7 +96,11 @@ r.delete('/me/services/:sid', requireRole('VENDOR'), ah(async (req, res) => {
 r.get('/:id', ah(async (req, res) => {
   const v = await prisma.vendorProfile.findUnique({
     where: { id: req.params.id },
-    include: { services: { include: { category: true } }, user: { select: { id: true, name: true, email: true } } },
+    include: {
+      services: { include: { category: true } }, user: { select: { id: true, name: true, email: true } },
+      portfolio: { orderBy: { createdAt: 'desc' }, take: 12 }, reviews: { orderBy: { createdAt: 'desc' }, take: 10 },
+      _count: { select: { workOrders: { where: { status: 'COMPLETED' } } } },
+    },
   });
   if (!v) throw new HttpError(404, 'Vendor not found');
   res.json(v);

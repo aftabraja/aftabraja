@@ -211,4 +211,30 @@ await req(`/talent/${talents[0].id}/enquiries`, { purpose: 'ENDORSEMENT', organi
 const legends = await req('/talent?purpose=LEAGUE&status=RETIRED', null, T);
 assert(legends.length >= 2, 'legends available for leagues');
 await req(`/talent/${legends[0].id}/enquiries`, { purpose: 'LEAGUE', leagueId: L.id, budget: 1200000, dates: 'Jan 2027 season', message: 'We would like to sign you as the icon player and mentor for CLT10 Season 1.' }, T);
+
+// ---- Procurement: RFQ → quotes → award → proof → approve → review ----
+const jerseyVendors = await req('/vendors?category=jersey-printing', null, T);
+const allVendors = await req('/vendors', null, T);
+const brandwall = allVendors.find((v) => v.companyName === 'Brandwall Fabricators');
+const rfq = await req(`${P}/procurement/rfqs`, { title: 'Match kits — 8 teams', categorySlug: 'jersey-printing', specs: 'Sublimated jerseys and trousers, 180 GSM, 8 teams × 25 sets, sizes S–XXL, name & number printed, sponsor logos as per placement map.', quantity: '200 sets', location: 'Mumbai', neededBy: days(20), budgetMax: 400000, vendorIds: [...jerseyVendors.map((v) => v.id), brandwall.id] }, T);
+const V2 = await login('vendor2@demo.sportsiq.in'); // SportsWear Pro
+const V12 = await login('vendor12@demo.sportsiq.in'); // Brandwall Fabricators
+await req(`/vendor-portal/rfqs/${rfq.id}/quote`, { amount: 340000, gstAmount: 17000, timeline: 'Sample in 4 days, bulk in 12 days', terms: '40% advance, balance on delivery' }, V2);
+await req(`/vendor-portal/rfqs/${rfq.id}/quote`, { amount: 395000, gstAmount: 19750, timeline: 'Bulk in 15 days', terms: '50% advance' }, V12);
+const cmp = await req(`${P}/procurement/rfqs/${rfq.id}`, null, T);
+assert(cmp.quotes.find((q) => q.isLowest).vendor.companyName === 'SportsWear Pro', 'lowest quote flagged');
+const award = await req(`${P}/procurement/quotes/${cmp.quotes.find((q) => q.isLowest).id}/award`, { createContract: true, createExpense: true, expenseCategory: 'Jerseys & Kits', contactPerson: 'Arjun Nair (Ops)' }, T);
+assert(award.contractId && award.expenseId, 'award creates contract draft and expense');
+await req(`/vendor-portal/work-orders/${award.workOrderId}/updates`, { kind: 'START', body: 'Fabric ordered, sampling started' }, V2);
+await req(`/vendor-portal/work-orders/${award.workOrderId}/updates`, { kind: 'PROOF', body: 'Sample jersey for Mumbai Mavericks', attachments: [face('Sample Kit', 210)] }, V2);
+await req(`${P}/procurement/work-orders/${award.workOrderId}/updates`, { kind: 'REVISION', body: 'Please move the sponsor logo 2 cm higher on the chest.' }, T);
+await req(`/vendor-portal/work-orders/${award.workOrderId}/updates`, { kind: 'SUBMIT', body: 'Revised sample + bulk production photos' }, V2);
+await req(`${P}/procurement/work-orders/${award.workOrderId}/updates`, { kind: 'APPROVE' }, T);
+await req(`${P}/procurement/work-orders/${award.workOrderId}/review`, { quality: 5, onTime: 4, value: 5, comment: 'Great print quality, quick turnaround on revisions.' }, T);
+const sw = (await req('/vendors?category=jersey-printing', null, T)).find((v) => v.companyName === 'SportsWear Pro');
+assert(sw.reviewCount >= 1, 'vendor rating updated from review');
+// a second RFQ left open with quotes for the demo
+const rfq2 = await req(`${P}/procurement/rfqs`, { title: 'Ambulance standby — playoffs', categorySlug: 'medical', specs: 'ALS ambulance with paramedic at the venue for 4 playoff matches, 4 hours each.', quantity: '4 match days', location: 'Wankhede Turf A', neededBy: days(30), inviteAllInCategory: true }, T);
+await req(`/vendor-portal/rfqs/${rfq2.id}/quote`, { amount: 36000, gstAmount: 0, timeline: 'Available on all 4 dates', terms: 'Payment after each match' }, await login('vendor14@demo.sportsiq.in'));
+console.log('procurement: RFQ awarded, work order completed, vendor rated', sw.rating);
 console.log('DEMO SEASON OK');

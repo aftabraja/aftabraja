@@ -34,6 +34,7 @@ import Logistics from './pages/league/Logistics';
 import Ticketing from './pages/league/Ticketing';
 import Accreditation from './pages/league/Accreditation';
 import Reports from './pages/league/Reports';
+import Procurement, { RfqDetail, WorkOrderDetail } from './pages/league/Procurement';
 import TalentMarket from './pages/Talent';
 import AgentHome from './pages/Agent';
 import AccredApply from './pages/AccredApply';
@@ -103,6 +104,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="/leagues/:leagueId/tickets" element={<Ticketing />} />
                 <Route path="/leagues/:leagueId/accreditation" element={<Accreditation />} />
                 <Route path="/leagues/:leagueId/reports" element={<Reports />} />
+                <Route path="/leagues/:leagueId/procurement" element={<Procurement />} />
+                <Route path="/leagues/:leagueId/procurement/rfqs/:rid" element={<RfqDetail />} />
+                <Route path="/leagues/:leagueId/procurement/work-orders/:wid" element={<WorkOrderDetail />} />
                 <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/talent" element={<Protected roles={['LEAGUE_OWNER', 'LEAGUE_STAFF', 'SPONSOR']}><TalentMarket /></Protected>} />
                 <Route path="/agent" element={<Protected roles={['TALENT_AGENT']}><AgentHome /></Protected>} />

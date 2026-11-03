@@ -73,14 +73,8 @@ r.post('/contracts', ah(async (req, res) => {
   const leagueId = req.params.leagueId;
   await assertLeague(me(req), leagueId, 'staff');
   const d = z.object({ templateKey: z.string(), counterparty: z.string().min(1), values: z.record(z.union([z.string(), z.number()])).default({}) }).parse(req.body);
-  const t = CONTRACT_TEMPLATES.find((x) => x.key === d.templateKey);
-  if (!t) throw new HttpError(400, 'Unknown template');
-  const l = await prisma.league.findUniqueOrThrow({ where: { id: leagueId } });
-  const fmt = (x: Date | null) => (x ? x.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
-  const role = { franchise: 'Franchisee', player: 'Player', sponsorship: 'Sponsor', vendor: 'Vendor', venue: 'Venue Owner', broadcast: 'Broadcaster', nda: 'Recipient', 'image-release': 'Participant' }[t.key] ?? 'Counterparty';
-  const body = fillTemplate(t.body, { league_name: l.name, season_start: fmt(l.startDate), season_end: fmt(l.endDate), counterparty: d.counterparty, counterparty_role: role, ...d.values });
-  const c = await prisma.contract.create({ data: { leagueId, templateKey: t.key, title: `${t.title} — ${d.counterparty}`, counterparty: d.counterparty, body } });
-  await audit(me(req).id, 'create', 'Contract', c.id, { template: t.key });
+  const c = await createContractDraft(leagueId, d.templateKey, d.counterparty, d.values);
+  await audit(me(req).id, 'create', 'Contract', c.id, { template: d.templateKey });
   res.status(201).json(c);
 }));
 
@@ -107,5 +101,16 @@ r.delete('/contracts/:id', ah(async (req, res) => {
   await prisma.contract.delete({ where: { id: req.params.id, leagueId: req.params.leagueId } });
   res.json({ ok: true });
 }));
+
+/** Create a contract draft from a template (also used when a vendor quote is awarded) */
+export async function createContractDraft(leagueId: string, templateKey: string, counterparty: string, values: Record<string, string | number>) {
+  const t = CONTRACT_TEMPLATES.find((x) => x.key === templateKey);
+  if (!t) throw new HttpError(400, 'Unknown template');
+  const l = await prisma.league.findUniqueOrThrow({ where: { id: leagueId } });
+  const fmt = (x: Date | null) => (x ? x.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+  const role = { franchise: 'Franchisee', player: 'Player', sponsorship: 'Sponsor', vendor: 'Vendor', venue: 'Venue Owner', broadcast: 'Broadcaster', nda: 'Recipient', 'image-release': 'Participant' }[t.key] ?? 'Counterparty';
+  const body = fillTemplate(t.body, { league_name: l.name, season_start: fmt(l.startDate), season_end: fmt(l.endDate), counterparty, counterparty_role: role, ...values });
+  return prisma.contract.create({ data: { leagueId, templateKey: t.key, title: `${t.title} — ${counterparty}`, counterparty, body } });
+}
 
 export default r;
