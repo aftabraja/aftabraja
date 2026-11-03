@@ -487,4 +487,46 @@ const jobs2 = await req('/admin/run-jobs', {}, ADMIN);
 assert(jobs1.sent >= 3 && jobs2.sent === 0, 'expiry alerts sent once per level');
 console.log('legal: contract v' + k2.version, k2.status, '· NDA rejected back to draft · expiry alerts', jobs1.sent);
 
+
+// ---- Platform: comments & @mentions, department permissions, search, next season ----
+const people = await req(`${P}/comments/people`, null, T);
+const opsP = people.find((x) => x.role === 'Operations');
+const cm = await req(`${P}/comments`, { type: 'Contract', id: k0.id, body: `@[${opsP.name}](${opsP.id}) please confirm the delivery dates in clause 2 before we sign.` }, T);
+assert(cm.mentions.length === 1, 'mention recorded');
+const opsNotes = await req('/notifications', null, OPS);
+assert(opsNotes.items.some((x) => /mentioned you/.test(x.title)), 'mentioned user notified');
+await req(`${P}/comments`, { type: 'Contract', id: k0.id, body: 'Confirmed — dates match the RFQ.' }, OPS);
+const toContract = await req(`${P}/comments`, { type: 'Contract', id: k0.id, body: 'hi' }, TO).then(() => true, () => false);
+assert(!toContract, 'team owners cannot comment on league contracts');
+await req(`${P}/comments`, { type: 'JerseyDesign', id: design.id, body: 'Can we try a darker navy on the sleeves?' }, TO);
+// A marketing hire: sees marketing, not finance
+const mkHire = await req(`/leagues/${L.id}/members`, { name: 'Neha Kulkarni', email: 'marketing@demo.sportsiq.in', department: 'Marketing', title: 'Marketing Manager' }, T);
+const MK = (await req('/auth/set-password', { token: new URL(mkHire.inviteUrl).searchParams.get('token'), password: 'Demo@1234', acceptTerms: true })).token;
+assert(await req(`${P}/finance`, null, MK).then(() => false, () => true), 'marketing cannot see finance by default');
+await req(`${P}/marketing/posts`, null, MK);
+assert(await req(`${P}/crm/deals`, { company: 'Test Co' }, MK).then(() => false, () => true), 'marketing has view-only CRM');
+const lm = await req(`/leagues/${L.id}`, null, MK);
+assert(lm.permissions.finance === 'none' && lm.permissions.marketing === 'edit', 'permissions exposed to the UI');
+await req(`/leagues/${L.id}/permissions`, { Marketing: { finance: 'view', sponsorship: 'edit' } }, T, 'PUT');
+await req(`${P}/finance`, null, MK);
+assert(await req(`${P}/finance/expenses`, { category: 'Marketing', description: 'x', amount: 1, payee: 'y' }, MK).then(() => false, () => true), 'view-only finance cannot add expenses');
+// Global search respects access
+const sOwner = await req('/search?q=velocity', null, T);
+assert(sOwner.groups['Sponsor deals']?.length, 'owner finds sponsor deals');
+const sTeam = await req('/search?q=agreement', null, TO);
+assert(!sTeam.groups['Contracts'], 'team owners do not see league contracts in search');
+const sMk = await req(`/search?q=${encodeURIComponent('stumps')}`, null, MK);
+assert(sMk.groups['Expenses']?.length, 'finance view unlocks expense search');
+// Next season
+const ns = await req(`/leagues/${L.id}/next-season`, { season: '2028', carryPlayers: true }, T);
+assert(ns.teams === teams.length && ns.carried > 20, 'next season carries teams and squads');
+const nsL = await req(`/leagues/${ns.league.id}`, null, T);
+assert(nsL.seasons.length === 2 && nsL.season === '2028', 'season switcher data');
+const dupSeason = await req(`/leagues/${L.id}/next-season`, { season: '2028' }, T).then(() => true, () => false);
+assert(!dupSeason, 'duplicate season blocked');
+const retNext = await req(`/leagues/${ns.league.id}/squads/teams/${(await req(`/leagues/${ns.league.id}/teams`, null, TO0))[0].id}/retention`, null, TO0);
+assert(retNext.eligible.length > 0, 'carried players are retention-eligible for their old team');
+const seasonCmp = await req(`/leagues/${L.id}/seasons`, null, T);
+assert(seasonCmp.length === 2 && seasonCmp[0].income > 0, 'season comparison');
+console.log('platform: mentions, permissions, search and season 2028 (carried', ns.carried, 'players)');
 console.log('DEMO SEASON OK');

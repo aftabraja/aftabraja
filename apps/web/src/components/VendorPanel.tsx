@@ -7,14 +7,14 @@ import { get, post } from '../lib/api';
 import { inr } from '../lib/format';
 import { Avatar, Badge, Button, Empty, Spinner, Textarea, cx } from './ui';
 
-interface PanelState { open: boolean; category?: string; leagueId?: string }
-const Ctx = createContext<{ state: PanelState; openVendors: (category?: string, leagueId?: string) => void; close: () => void }>(null!);
+interface PanelState { open: boolean; category?: string; leagueId?: string; vendorId?: string }
+const Ctx = createContext<{ state: PanelState; openVendors: (category?: string, leagueId?: string, vendorId?: string) => void; close: () => void }>(null!);
 
 export function VendorPanelProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PanelState>({ open: false });
   const value = useMemo(() => ({
     state,
-    openVendors: (category?: string, leagueId?: string) => setState({ open: true, category, leagueId }),
+    openVendors: (category?: string, leagueId?: string, vendorId?: string) => setState({ open: true, category, leagueId, vendorId }),
     close: () => setState({ open: false }),
   }), [state]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -25,12 +25,12 @@ export interface Category { id: string; slug: string; name: string; group: strin
 export const useCategories = () => useQuery({ queryKey: ['vendor-categories'], queryFn: () => get<{ groups: string[]; categories: Category[] }>('/vendors/categories'), staleTime: 5 * 60_000 });
 
 /** Vendor search UI — used in the right-hand split pane and in the full marketplace page. */
-export function VendorBrowser({ initialCategory, leagueId, onClose, compact }: { initialCategory?: string; leagueId?: string; onClose?: () => void; compact?: boolean }) {
+export function VendorBrowser({ initialCategory, initialVendor, leagueId, onClose, compact }: { initialCategory?: string; initialVendor?: string; leagueId?: string; onClose?: () => void; compact?: boolean }) {
   const [category, setCategory] = useState(initialCategory ?? '');
   const [q, setQ] = useState('');
   const [city, setCity] = useState('');
   const [sort, setSort] = useState('rating');
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialVendor ?? null);
   const cats = useCategories();
   const params = new URLSearchParams({ ...(category && { category }), ...(q && { q }), ...(city && { city }), sort }).toString();
   const vendors = useQuery({ queryKey: ['vendors', params], queryFn: () => get<any[]>(`/vendors?${params}`) });
@@ -202,7 +202,7 @@ export function VendorPane() {
     <>
       <div className="fixed inset-0 z-30 bg-ink-900/30 lg:hidden" onClick={close} />
       <aside className="fixed inset-y-0 right-0 z-40 w-full max-w-md border-l border-ink-200 bg-white shadow-pop lg:sticky lg:top-0 lg:z-0 lg:h-screen lg:w-[420px] lg:max-w-none lg:shrink-0 lg:shadow-none xl:w-[460px]">
-        <VendorBrowser key={`${state.category}-${state.leagueId}`} initialCategory={state.category} leagueId={state.leagueId} onClose={close} compact />
+        <VendorBrowser key={`${state.category}-${state.leagueId}-${state.vendorId}`} initialCategory={state.category} initialVendor={state.vendorId} leagueId={state.leagueId} onClose={close} compact />
       </aside>
     </>
   );

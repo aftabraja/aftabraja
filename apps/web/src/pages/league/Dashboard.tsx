@@ -4,6 +4,7 @@ import { ArrowRight, BookOpenCheck, CalendarDays, CircleDollarSign, Megaphone, S
 import { get } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
 import { date, inrShort } from '../../lib/format';
+import { SeasonSwitcher } from '../../components/Seasons';
 import { Avatar, Badge, Button, Card, PageHeader, Progress, Spinner, Stat, StatusBadge } from '../../components/ui';
 import { useVendorPanel } from '../../components/VendorPanel';
 
@@ -21,7 +22,7 @@ export default function LeagueDashboard() {
     <>
       <PageHeader
         title={<span className="flex items-center gap-3"><Avatar name={league.name} src={league.logoUrl} size={44} />{league.name}</span>}
-        subtitle={<span className="flex flex-wrap items-center gap-2">{[league.sport, league.format, league.category, league.city].filter(Boolean).join(' · ')} <StatusBadge status={league.status} /></span>}
+        subtitle={<span className="flex flex-wrap items-center gap-2">{[league.sport, league.format, league.category, league.city].filter(Boolean).join(' · ')} <StatusBadge status={league.status} /><SeasonSwitcher league={league} /></span>}
         actions={<Link to={`/leagues/${leagueId}/playbook`}><Button><BookOpenCheck className="h-4 w-4" />Open playbook</Button></Link>}
       />
 
@@ -52,7 +53,7 @@ export default function LeagueDashboard() {
         <Stat label="Teams" value={`${x.teamsWithOwners}/${x.teams}`} sub="franchises sold" icon={<Shield className="h-4 w-4" />} />
         <Stat label="Player registrations" value={Object.values(x.players as Record<string, number>).reduce((a, b) => a + b, 0)} sub={`${x.players.SHORTLISTED ?? 0} shortlisted · ${x.players.SOLD ?? 0} sold`} icon={<UsersRound className="h-4 w-4" />} />
         <Stat label="Sponsorship" value={inrShort(x.sponsorship.soldValue)} sub={`of ${inrShort(x.sponsorship.inventoryValue)} inventory · ${x.sponsorship.sold}/${x.sponsorship.total} sold`} icon={<Megaphone className="h-4 w-4" />} />
-        <Stat label="Net P&L" value={inrShort(x.finance.income - x.finance.expense)} tone={x.finance.income - x.finance.expense >= 0 ? 'green' : 'red'} sub={`${inrShort(x.finance.income)} in · ${inrShort(x.finance.expense)} out`} icon={<CircleDollarSign className="h-4 w-4" />} />
+        {x.finance && <Stat label="Net P&L" value={inrShort(x.finance.income - x.finance.expense)} tone={x.finance.income - x.finance.expense >= 0 ? 'green' : 'red'} sub={`${inrShort(x.finance.income)} in · ${inrShort(x.finance.expense)} out`} icon={<CircleDollarSign className="h-4 w-4" />} />}
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_1fr]">
@@ -70,11 +71,11 @@ export default function LeagueDashboard() {
           </div>
         </Card>
         <div className="space-y-6">
-          <Card title="Budget utilisation">
+          {x.finance && <Card title="Budget utilisation">
             <div className="flex items-end justify-between"><span className="text-2xl font-bold">{inrShort(x.finance.expense)}</span><span className="text-sm text-ink-500">of {inrShort(x.finance.budget)} planned</span></div>
             <Progress className="mt-3" value={x.finance.budget ? (x.finance.expense / x.finance.budget) * 100 : 0} tone={x.finance.expense > x.finance.budget ? 'red' : 'brand'} />
             {isStaff && <Link to={`/leagues/${leagueId}/finance`} className="mt-4 inline-block text-xs font-semibold text-brand-700 hover:underline">Open finance →</Link>}
-          </Card>
+          </Card>}
           <Card title="Critical steps pending">
             <ul className="space-y-2">
               {pb.data?.phases.flatMap((p: any) => p.steps).filter((s: any) => s.critical && s.status !== 'DONE' && s.status !== 'SKIPPED').slice(0, 6).map((s: any) => (

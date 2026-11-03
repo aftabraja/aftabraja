@@ -117,6 +117,9 @@ model League {
   numTeams    Int          @default(0)
   teamPurse   Int? // INR
   legalChain  String[] @default(["Operations", "Legal", "League Owner"])
+  seriesId    String?   // all seasons of the same league share a series id
+  season      String?   // e.g. "2027"
+  deptPermissions Json  @default("{}") // { [department]: { [module]: 'none' | 'view' | 'edit' } } overrides
   expenseApprovalLimit Int? // staff expenses above this need owner approval
   regOpensAt   DateTime? // player registration window
   regClosesAt  DateTime?
@@ -1363,4 +1366,18 @@ model SurveyResponse {
   name      String?
   email     String?
   createdAt DateTime @default(now())
+}
+
+model Comment {
+  id         String    @id @default(cuid())
+  leagueId   String
+  entityType String // Contract, WorkOrder, SponsorDeal, JerseyDesign, PlaybookStep, Match, Rfq
+  entityId   String
+  authorId   String
+  body       String
+  mentions   String[]  @default([])
+  editedAt   DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([leagueId, entityType, entityId])
 }

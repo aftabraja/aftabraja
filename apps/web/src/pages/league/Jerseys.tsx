@@ -6,6 +6,7 @@ import { del, get, patch, post, put } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
 import { ago, fileToDataUrl } from '../../lib/format';
 import { Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Textarea, cx } from '../../components/ui';
+import { Comments } from '../../components/Comments';
 import { JerseySvg, type JerseyColors } from '../../components/JerseySvg';
 
 const STATUS: Record<string, { label: string; color: string }> = { DRAFT: { label: 'Draft', color: 'gray' }, SUBMITTED: { label: 'Awaiting approval', color: 'amber' }, CHANGES_REQUESTED: { label: 'Changes requested', color: 'red' }, APPROVED: { label: 'Approved', color: 'green' } };
@@ -239,6 +240,7 @@ export function JerseyEditor() {
         <Textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} placeholder={review === 'APPROVE' ? 'Optional note for the designer and printer' : 'What needs to change?'} />
       </Modal>
       {send && <SendToVendors leagueId={leagueId} design={f} rules={rules} slotLabel={slotLabel} sizeCount={sizeCount} getFiles={async () => [await svgFile(frontRef.current?.querySelector('svg') ?? null), await svgFile(backRef.current?.querySelector('svg') ?? null)]} onClose={() => setSend(false)} onSent={(rfqId) => nav(`/leagues/${leagueId}/procurement/rfqs/${rfqId}`)} />}
+      {jid && <Comments className="mt-6" leagueId={leagueId} type="JerseyDesign" id={jid} title="Design feedback" />}
     </>
   );
 }

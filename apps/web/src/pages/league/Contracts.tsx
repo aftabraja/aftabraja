@@ -7,6 +7,7 @@ import { del, get, patch, post, put } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
 import { ago } from '../../lib/format';
 import { Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, StatusBadge, Table, Textarea } from '../../components/ui';
+import { Comments } from '../../components/Comments';
 import { useVendorPanel } from '../../components/VendorPanel';
 
 export function LegalNotice({ text }: { text?: string }) {
@@ -352,6 +353,7 @@ export function ContractEditor() {
           <ApprovalPanel contract={ct} onChange={refresh} />
           <SignedPanel key={`${ct.status}-${ct.signedCopies.length}`} contract={ct} onChange={refresh} />
           <VersionsPanel contract={ct} current={body} onRestored={refresh} />
+          <Comments leagueId={leagueId} type="Contract" id={ct.id} title="Review comments" />
           <Card title="Export">
             {!ack ? (
               <label className="flex gap-2 text-sm text-ink-700">

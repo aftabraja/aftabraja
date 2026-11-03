@@ -4,6 +4,7 @@ import { Check, ChevronDown, Circle, CircleDot, ExternalLink, Lightbulb, Papercl
 import { Link } from 'react-router-dom';
 import { get, patch } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
+import { Comments } from '../../components/Comments';
 import { useAuth } from '../../lib/auth';
 import { fileToDataUrl } from '../../lib/format';
 import { Badge, Button, Card, PageHeader, Progress, Spinner, StatusBadge, Textarea, cx } from '../../components/ui';
@@ -160,6 +161,7 @@ function StepRow({ s, people, overdue, leagueId, expanded, onToggle, canEdit, on
                       <input type="date" className="input mt-1" value={s.dueDate ? s.dueDate.slice(0, 10) : ''} onChange={(e) => onUpdate({ dueDate: e.target.value || null })} />
                     </label>
                   </div>
+                  <Comments leagueId={leagueId} type="PlaybookStep" id={s.key} title="Discussion" className="bg-white" />
                   <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes, decisions, owner, deadlines…" />
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="secondary" loading={saving} onClick={() => onUpdate({ notes })}>Save notes</Button>

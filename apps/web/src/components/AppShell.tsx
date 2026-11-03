@@ -8,8 +8,9 @@ import { useAuth } from '../lib/auth';
 import { get, post } from '../lib/api';
 import { ago, ROLE_LABEL } from '../lib/format';
 import { Avatar, cx } from './ui';
+import { GlobalSearch } from './GlobalSearch';
 import { Logo } from './Logo';
-import { useVendorPanel, VendorPane } from './VendorPanel';
+import { VendorPane } from './VendorPanel';
 
 interface NavItem { to: string; label: string; icon: ReactNode; end?: boolean }
 
@@ -87,8 +88,17 @@ function leagueNav(id: string, league: any, i: (C: any) => ReactNode): { title?:
     { to: `${base}/logistics`, label: 'Team Itinerary', icon: i(Plane) },
     { to: `${base}/jerseys`, label: 'Jersey Studio', icon: i(Shirt) },
   ] }];
+  const P = league.permissions as Record<string, string> | null;
+  const MOD: Record<string, string> = { players: 'players', trials: 'players', auction: 'auction', matchday: 'matchday', logistics: 'logistics', jerseys: 'jerseys', accreditation: 'accreditation', tickets: 'ticketing', procurement: 'procurement', crm: 'sponsorship', marketing: 'marketing', surveys: 'marketing', finance: 'finance', reports: 'reports', decks: 'decks', contracts: 'legal' };
+  const visible = (it: NavItem) => { const m = MOD[it.to.split('/')[3] ?? '']; return !P || !m || P[m] !== 'none'; };
   return [
     head,
+    ...seasonOps(base, i).map((sec) => ({ ...sec, items: sec.items.filter(visible) })).filter((sec) => sec.items.length),
+  ];
+}
+
+function seasonOps(base: string, i: (C: any) => ReactNode): { title?: string; items: NavItem[] }[] {
+  return [
     { title: 'Season operations', items: [
       { to: `${base}/teams`, label: 'Teams & Owners', icon: i(Shield) },
       { to: `${base}/players`, label: 'Players', icon: i(UsersRound) },
@@ -197,7 +207,6 @@ export function AppShell() {
   const sections = useNav();
   const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { openVendors, state } = useVendorPanel();
   const loc = useLocation();
   const leagueId = useMatch('/leagues/:leagueId/*')?.params.leagueId;
   const unread = useQuery({ queryKey: ['unread-messages'], queryFn: () => get<{ count: number }>('/messages/unread-count'), refetchInterval: 30_000 });
@@ -241,11 +250,7 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-ink-200 bg-white/90 px-4 backdrop-blur sm:px-6">
           <button className="rounded-lg p-2 hover:bg-ink-100 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
-          {canSearchVendors && (
-            <button onClick={() => openVendors(undefined, leagueId)} className={cx('flex h-10 min-w-0 max-w-md flex-1 items-center gap-2 rounded-lg border border-ink-200 bg-ink-50 px-3 text-left text-sm text-ink-500 transition hover:border-brand-200 hover:bg-white', state.open && 'border-brand-500 bg-white')}>
-              <Search className="h-4 w-4 shrink-0" /><span className="truncate">Search vendors — stadiums, umpires, jersey printers, anchors…</span>
-            </button>
-          )}
+          {user && <GlobalSearch leagueId={leagueId} canSearchVendors={!!canSearchVendors} />}
           <div className="ml-auto flex items-center gap-1">
             <Link to="/messages" className="relative rounded-lg p-2 text-ink-500 hover:bg-ink-100 hover:text-ink-900" aria-label="Messages">
               <MessageSquare className="h-5 w-5" />

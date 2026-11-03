@@ -12,6 +12,8 @@ import { slugify } from '../lib/util.js';
 import { appUrl, layout, mailConfigured, sendEmail } from '../lib/mailer.js';
 import { issueToken } from '../lib/tokens.js';
 import { financeSummary } from '../lib/finance.js';
+import { seasonComparison, startNextSeason } from '../lib/seasons.js';
+import { DEPARTMENTS, MODULES, defaultLevel, matrix, userLevels } from '../lib/permissions.js';
 import { ALL_STEPS, PLAYBOOK, STEP_KEYS } from '../data/playbook.js';
 
 const r = Router();
@@ -87,7 +89,42 @@ r.get('/:id', ah(async (req, res) => {
     where: { id: req.params.id },
     include: { owner: { select: { id: true, name: true, email: true } }, _count: { select: { teams: true, registrations: true, opportunities: true, members: true } } },
   });
-  res.json({ ...league, access, progress: await leagueProgress(league.id) });
+  const seasons = league.seriesId ? await prisma.league.findMany({ where: { seriesId: league.seriesId }, select: { id: true, name: true, season: true, status: true }, orderBy: { createdAt: 'asc' } }) : [];
+  res.json({ ...league, access, permissions: await userLevels(me(req), league.id), seasons, progress: await leagueProgress(league.id) });
+}));
+
+// ---------- Seasons ----------
+r.post('/:id/next-season', ah(async (req, res) => {
+  await assertLeague(me(req), req.params.id, 'admin');
+  const d = z.object({ season: z.string().trim().min(2).max(20), startDate: z.coerce.date().nullable().optional(), endDate: z.coerce.date().nullable().optional(), carryPlayers: z.boolean().default(true) }).parse(req.body);
+  try { res.status(201).json(await startNextSeason(req.params.id, me(req).id, d)); }
+  catch (e) { const err = e as Error & { status?: number }; throw err.status ? new HttpError(err.status, err.message) : err; }
+}));
+
+r.get('/:id/seasons', ah(async (req, res) => {
+  await assertLeague(me(req), req.params.id, 'staff');
+  const l = await prisma.league.findUniqueOrThrow({ where: { id: req.params.id }, select: { seriesId: true, id: true } });
+  res.json(await seasonComparison(l.seriesId ?? l.id));
+}));
+
+// ---------- Department permissions ----------
+r.get('/:id/permissions', ah(async (req, res) => {
+  await assertLeague(me(req), req.params.id, 'staff');
+  const l = await prisma.league.findUniqueOrThrow({ where: { id: req.params.id }, select: { deptPermissions: true, members: { select: { department: true } } } });
+  const depts = [...new Set([...DEPARTMENTS, ...l.members.map((m) => m.department)])];
+  res.json({ modules: MODULES, departments: depts, matrix: matrix(l.deptPermissions, depts), defaults: matrix({}, depts) });
+}));
+
+r.put('/:id/permissions', ah(async (req, res) => {
+  await assertLeague(me(req), req.params.id, 'admin');
+  const keys = MODULES.map((m) => m.key);
+  const d = z.record(z.record(z.enum(['none', 'view', 'edit']))).parse(req.body);
+  for (const row of Object.values(d)) for (const k of Object.keys(row)) if (!keys.includes(k)) throw new HttpError(400, `Unknown module ${k}`);
+  // Store only differences from the defaults
+  const overrides = Object.fromEntries(Object.entries(d).map(([dept, row]) => [dept, Object.fromEntries(Object.entries(row).filter(([m, lv]) => lv !== defaultLevel(dept, m)))]).filter(([, row]) => Object.keys(row as object).length));
+  await prisma.league.update({ where: { id: req.params.id }, data: { deptPermissions: overrides } });
+  await audit(me(req).id, 'update-permissions', 'League', req.params.id, overrides);
+  res.json({ ok: true });
 }));
 
 r.patch('/:id', ah(async (req, res) => {
@@ -115,7 +152,9 @@ r.delete('/:id', ah(async (req, res) => {
 // Dashboard summary
 r.get('/:id/dashboard', ah(async (req, res) => {
   const id = req.params.id;
-  await assertLeague(me(req), id);
+  const access = await assertLeague(me(req), id);
+  const levels = await userLevels(me(req), id);
+  const hideFinance = access === 'team' || levels?.finance === 'none';
   const [teams, registrations, opportunities, fin, members] = await Promise.all([
     prisma.team.count({ where: { leagueId: id } }),
     prisma.playerRegistration.groupBy({ by: ['status'], where: { leagueId: id }, _count: true }),
@@ -134,7 +173,7 @@ r.get('/:id/dashboard', ah(async (req, res) => {
       inventoryValue: opportunities.reduce((s, o) => s + o.price, 0),
       soldValue: opportunities.filter((o) => o.status === 'SOLD').reduce((s, o) => s + o.price, 0),
     },
-    finance: { expense: fin.pnl.expense, income: fin.pnl.income, budget: fin.pnl.plannedBudget, pendingApproval: fin.pnl.pendingApprovalCount },
+    finance: hideFinance ? null : { expense: fin.pnl.expense, income: fin.pnl.income, budget: fin.pnl.plannedBudget, pendingApproval: fin.pnl.pendingApprovalCount },
   });
 }));
 

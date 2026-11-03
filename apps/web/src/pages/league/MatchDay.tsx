@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Plus, Radio, Trash2, Tv } from 'lucide-react';
 import { del, get, patch, post } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
+import { Comments } from '../../components/Comments';
 import { Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Progress, Select, Spinner, Table, Tabs, cx } from '../../components/ui';
 
 const PHASE_LABEL: Record<string, string> = { 'T-7': 'One week out', 'T-2': 'Two days out', 'T-1': 'Day before', MATCH_DAY: 'Match day', POST: 'After the match' };
@@ -104,6 +105,7 @@ function MatchChecklist({ matchId }: { matchId: string }) {
           </Card>
         );
       })}
+      <Comments leagueId={leagueId} type="Match" id={matchId} title="Match-day notes" />
       <Modal open={!!add} onClose={() => setAdd(null)} title="Add a check" footer={<><Button variant="secondary" onClick={() => setAdd(null)}>Cancel</Button><Button disabled={!add?.title || add.title.length < 3} loading={create.isPending} onClick={() => create.mutate()}>Add</Button></>}>
         {add && <div className="grid gap-3 sm:grid-cols-2">
           <ErrorText error={create.error} />

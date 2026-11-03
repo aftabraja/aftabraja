@@ -7,6 +7,7 @@ import { get, patch, post } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
 import { ago, date, fileToDataUrl, inr, inrShort } from '../../lib/format';
 import { Avatar, Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, Tabs, Textarea, cx } from '../../components/ui';
+import { Comments } from '../../components/Comments';
 import { useCategories } from '../../components/VendorPanel';
 
 export const WO_STATUS: Record<string, { label: string; color: string }> = {
@@ -227,6 +228,7 @@ export function RfqDetail() {
           {award.opts.createExpense && <Select value={award.opts.expenseCategory} onChange={(e) => setAward({ ...award, opts: { ...award.opts, expenseCategory: e.target.value } })} options={meta.data?.expenseCategories ?? []} />}
         </div>}
       </Modal>
+      <Comments className="mt-6" leagueId={leagueId} type="Rfq" id={rid!} />
     </>
   );
 }
@@ -315,6 +317,7 @@ export function WorkOrderDetail() {
           )}
         </div>
       </div>
+      <Comments className="mt-6" leagueId={leagueId} type="WorkOrder" id={wid!} title="Internal discussion" />
     </>
   );
 }

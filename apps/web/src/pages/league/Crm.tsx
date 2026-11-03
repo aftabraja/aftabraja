@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, FileText, MessageSquare, Phone, Plus, Presentation, Trophy, Users, X } from 'lucide-react';
 import { get, patch, post } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
 import { ago, date, inr, inrShort } from '../../lib/format';
 import { Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Progress, Select, Spinner, Stat, Tabs, cx } from '../../components/ui';
+import { Comments } from '../../components/Comments';
 import { Attachments, UploadButton } from './Procurement';
 
 const STAGES = [
@@ -19,7 +20,8 @@ export default function Crm() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<'pipeline' | 'deliverables'>('pipeline');
   const q = useQuery({ queryKey: ['crm', leagueId], queryFn: () => get(`/leagues/${leagueId}/crm`) });
-  const [open, setOpen] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [open, setOpen] = useState<string | null>(params.get('deal'));
   const [add, setAdd] = useState(false);
   const move = useMutation({ mutationFn: ({ id, stage, lostReason }: any) => patch(`/leagues/${leagueId}/crm/deals/${id}`, { stage, lostReason }), onSuccess: () => qc.invalidateQueries({ queryKey: ['crm', leagueId] }) });
   if (q.isLoading) return <Spinner />;
@@ -152,6 +154,7 @@ function DealDrawer({ leagueId, id, owners, opportunities, onClose }: { leagueId
             ); })}
           </ol>
           {opp && <p className="text-xs text-ink-500">Package: {opp.title} · list price {inr(opp.price)}</p>}
+          <Comments leagueId={leagueId} type="SponsorDeal" id={id} title="Team discussion" />
         </div>
       </div>
       <Modal open={!!win} onClose={() => setWin(null)} title={`Close ${d.company} as won`} footer={<><Button variant="secondary" onClick={() => setWin(null)}>Cancel</Button><Button variant="success" loading={won.isPending} onClick={() => won.mutate()}>Mark as won</Button></>}>

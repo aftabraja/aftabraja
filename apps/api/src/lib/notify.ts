@@ -3,7 +3,7 @@ import { prisma } from './prisma.js';
 export async function notify(
   userIds: string[] | string,
   title: string,
-  opts: { body?: string; link?: string; type?: 'info' | 'success' | 'warning' | 'alert' } = {},
+  opts: { body?: string; link?: string; type?: 'info' | 'success' | 'warning' | 'alert' | 'mention' } = {},
 ) {
   const ids = Array.isArray(userIds) ? userIds : [userIds];
   if (!ids.length) return;

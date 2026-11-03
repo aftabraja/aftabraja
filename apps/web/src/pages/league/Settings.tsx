@@ -7,6 +7,7 @@ import { useLeague } from '../../lib/hooks';
 import { dateInput, fileToDataUrl } from '../../lib/format';
 import { Avatar, Button, Card, ErrorText, Field, Input, PageHeader, Select, Spinner, Textarea } from '../../components/ui';
 import { AiLogoStudio } from '../../components/AiLogoStudio';
+import { SeasonsCard } from '../../components/Seasons';
 
 export default function Settings() {
   const { leagueId, league, isAdmin } = useLeague();
@@ -59,6 +60,7 @@ export default function Settings() {
             <Field label="Visibility" hint="Public leagues appear to sponsors and players"><Select value={f.isPublic ? 'yes' : 'no'} onChange={(e) => setF({ ...f, isPublic: e.target.value === 'yes' })} options={[{ value: 'yes', label: 'Public' }, { value: 'no', label: 'Private' }]} /></Field>
           </div>
         </Card>
+        {league && <SeasonsCard leagueId={leagueId} league={league} isAdmin={isAdmin} />}
         {isAdmin && (
           <Card title={<span className="text-red-600">Danger zone</span>}>
             <div className="flex items-center justify-between gap-4"><p className="text-sm text-ink-500">Permanently delete this league and all its data.</p><Button variant="danger" loading={remove.isPending} onClick={() => confirm(`Type OK to delete ${league.name}`) && remove.mutate()}>Delete league</Button></div>

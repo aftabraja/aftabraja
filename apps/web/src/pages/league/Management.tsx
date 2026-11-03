@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Trash2, UserPlus, Users } from 'lucide-react';
-import { del, get, post } from '../../lib/api';
+import { RotateCcw, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
+import { del, get, post, put } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
 import { date } from '../../lib/format';
 import { Avatar, Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table } from '../../components/ui';
@@ -44,6 +44,7 @@ export default function Management() {
           </Table>
         )}
       </Card>
+      <PermissionsMatrix leagueId={leagueId} isAdmin={isAdmin} usedDepts={[...new Set((members.data ?? []).map((m) => m.department))]} />
       <Modal open={open} onClose={() => setOpen(false)} title="Add management member" footer={<><Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button><Button loading={add.isPending} onClick={() => add.mutate()}>Add member</Button></>}>
         <div className="space-y-4">
           <ErrorText error={add.error} />
@@ -58,5 +59,51 @@ export default function Management() {
       </Modal>
       <CredentialsModal data={creds} onClose={() => setCreds(null)} />
     </>
+  );
+}
+
+const LEVEL_STYLE: Record<string, string> = { edit: 'bg-emerald-50 text-emerald-800 border-emerald-200', view: 'bg-sky-50 text-sky-800 border-sky-200', none: 'bg-ink-100 text-ink-400 border-ink-200' };
+
+function PermissionsMatrix({ leagueId, isAdmin, usedDepts }: { leagueId: string; isAdmin: boolean; usedDepts: string[] }) {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['permissions', leagueId], queryFn: () => get(`/leagues/${leagueId}/permissions`) });
+  const [m, setM] = useState<Record<string, Record<string, string>> | null>(null);
+  const [all, setAll] = useState(false);
+  useEffect(() => { if (q.data && !m) setM(q.data.matrix); }, [q.data, m]);
+  const save = useMutation({ mutationFn: () => put(`/leagues/${leagueId}/permissions`, m), onSuccess: () => { qc.invalidateQueries({ queryKey: ['permissions', leagueId] }); qc.invalidateQueries({ queryKey: ['league', leagueId] }); } });
+  if (!q.data || !m) return <Card className="mt-6"><Spinner /></Card>;
+  const depts = (q.data.departments as string[]).filter((d) => all || usedDepts.includes(d));
+  const dirty = JSON.stringify(m) !== JSON.stringify(q.data.matrix);
+  return (
+    <Card className="mt-6" padded={false} title={<span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Department permissions</span>}
+      action={<div className="flex items-center gap-2">
+        <label className="flex items-center gap-1.5 text-xs text-ink-600"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />All departments</label>
+        {isAdmin && <><Button size="sm" variant="ghost" onClick={() => setM(q.data.defaults)}><RotateCcw className="h-3.5 w-3.5" />Defaults</Button><Button size="sm" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>Save permissions</Button></>}
+      </div>}>
+      <p className="px-5 pt-3 text-xs text-ink-500">What each department can see and change. You (the owner) always have full access. <b>Edit</b> = create and change · <b>View</b> = read only · <b>None</b> = hidden from their menu.</p>
+      <div className="px-5"><ErrorText error={save.error} /></div>
+      {!depts.length ? <p className="p-5 text-sm text-ink-500">Add management members to set their department's access, or tick “All departments”.</p> : (
+        <div className="overflow-x-auto p-5 pt-3">
+          <table className="w-full text-sm">
+            <thead><tr><th className="sticky left-0 bg-white py-2 pr-4 text-left text-xs font-semibold uppercase text-ink-500">Module</th>{depts.map((d) => <th key={d} className="px-1 py-2 text-center text-xs font-semibold text-ink-600">{d}</th>)}</tr></thead>
+            <tbody>
+              {q.data.modules.map((mod: any) => (
+                <tr key={mod.key} className="border-t border-ink-100">
+                  <td className="sticky left-0 bg-white py-1.5 pr-4 text-ink-800">{mod.label}</td>
+                  {depts.map((d) => (
+                    <td key={d} className="px-1 py-1.5 text-center">
+                      <select aria-label={`${d} — ${mod.label}`} disabled={!isAdmin} value={m[d]?.[mod.key] ?? 'view'} onChange={(e) => setM({ ...m, [d]: { ...m[d], [mod.key]: e.target.value } })}
+                        className={`rounded-md border px-1.5 py-1 text-xs font-semibold ${LEVEL_STYLE[m[d]?.[mod.key] ?? 'view']}`}>
+                        <option value="edit">Edit</option><option value="view">View</option><option value="none">None</option>
+                      </select>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }
