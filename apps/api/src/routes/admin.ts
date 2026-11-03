@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { DOC_TYPES } from '../lib/compliance.js';
+import { runExpiryChecks } from '../lib/jobs.js';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { ah } from '../lib/http.js';
@@ -143,6 +145,23 @@ r.post('/users/:id/erase', ah(async (req, res) => {
   await audit(me(req).id, 'erase-user', 'User', u.id);
   res.json({ ok: true });
 }));
+
+r.get('/vendor-documents', ah(async (req, res) => {
+  const where = req.query.status === 'pending' ? { verified: false } : {};
+  const docs = await prisma.vendorDocument.findMany({ where, orderBy: { createdAt: 'desc' }, take: 300 });
+  const vendors = await prisma.vendorProfile.findMany({ where: { id: { in: [...new Set(docs.map((d) => d.vendorId))] } }, select: { id: true, companyName: true } });
+  const name = Object.fromEntries(vendors.map((v) => [v.id, v.companyName]));
+  res.json(docs.map((d) => ({ ...d, label: DOC_TYPES[d.type], vendorName: name[d.vendorId] })));
+}));
+
+r.patch('/vendor-documents/:id', ah(async (req, res) => {
+  const { verified } = z.object({ verified: z.boolean() }).parse(req.body);
+  const d = await prisma.vendorDocument.update({ where: { id: req.params.id }, data: { verified, verifiedBy: verified ? me(req).name : null } });
+  await audit(me(req).id, verified ? 'verify' : 'unverify', 'VendorDocument', d.id);
+  res.json(d);
+}));
+
+r.post('/run-jobs', ah(async (_req, res) => res.json(await runExpiryChecks())));
 
 r.get('/audit', ah(async (_req, res) => {
   res.json(await prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 300, include: { user: { select: { name: true, email: true } } } }));

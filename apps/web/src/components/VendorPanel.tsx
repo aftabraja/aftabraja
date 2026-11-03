@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { ComplianceBadge } from './ComplianceBadge';
 import { ArrowLeft, BadgeCheck, MapPin, MessageSquare, Search, Send, Star, X, Store } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { get, post } from '../lib/api';
@@ -126,6 +127,12 @@ function VendorDetail({ id, leagueId, onBack }: { id: string; leagueId?: string;
         </div>
         {d.description && <p className="mt-3 text-sm text-ink-700">{d.description}</p>}
         {d.serviceAreas?.length > 0 && <p className="mt-2 text-xs text-ink-500">Serves: {d.serviceAreas.join(', ')}</p>}
+        {d.compliance && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
+            <ComplianceBadge c={{ compliant: d.compliance.compliant, missing: d.compliance.items.filter((i: any) => i.status !== 'VALID').length }} />
+            {d.compliance.items.map((i: any) => <span key={i.type} className={`rounded px-1.5 py-0.5 ${i.status === 'VALID' ? 'bg-emerald-50 text-emerald-800' : i.status === 'EXPIRED' ? 'bg-red-50 text-red-800' : 'bg-ink-100 text-ink-600'}`}>{i.label}: {i.status.toLowerCase()}</span>)}
+          </div>
+        )}
       </div>
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         <div>

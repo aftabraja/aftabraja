@@ -309,4 +309,59 @@ const mc = await req(`${P}/marketing/contacts`, null, T);
 const sentPr = await req(`${P}/marketing/releases/${pr.id}/send`, { contactIds: mc.map((c) => c.id) }, T);
 await req(`${P}/marketing/releases/${pr.id}`, { addCoverage: { outlet: 'Mumbai Sports Daily', url: 'https://example.com/clt10-table' } }, T, 'PATCH');
 console.log('marketing: planned', planned.created, 'match posts, press release sent to', sentPr.sent);
+
+// ---- Legal workflow: versions, approval chain, signed copy; vendor compliance ----
+const C = `${P}/studio/contracts`;
+const LG = `${P}/legal`;
+const k0 = await req(`${C}/${award.contractId}`, null, T);
+const filled = k0.body.replace('[LEAGUE ENTITY]', 'CLT10 Sports Pvt Ltd').replace(/\[[A-Z ]{3,}\]/g, 'as agreed in Schedule A');
+await req(`${C}/${k0.id}`, { body: filled, note: 'Filled placeholders' }, T, 'PATCH');
+const clauses = await req(`${LG}/clauses`, null, T);
+const arb = clauses.clauses.find((c) => c.title === 'Arbitration');
+await req(`${C}/${k0.id}`, { body: filled + '\n\n' + arb.body.replace(/\[[^\]]+\]/g, 'Mumbai'), note: 'Added arbitration clause' }, T, 'PATCH');
+const vers = await req(`${LG}/contracts/${k0.id}/versions`, null, T);
+assert(vers.length === 3 && vers[0].version === 3, 'each saved edit creates a version');
+await req(`${LG}/contracts/${k0.id}/submit`, {}, T);
+const ownerEarly = await req(`${LG}/contracts/${k0.id}/decide`, { decision: 'APPROVED' }, T).then(() => true, () => false);
+assert(!ownerEarly, 'Operations step must be approved by an Operations member');
+const lockedEdit = await req(`${C}/${k0.id}`, { body: 'x' }, T, 'PATCH').then(() => true, () => false);
+assert(!lockedEdit, 'contract under review cannot be edited');
+await req(`${LG}/contracts/${k0.id}/decide`, { decision: 'APPROVED', note: 'Scope and dates match the RFQ' }, OPS);
+await req(`${LG}/contracts/${k0.id}/decide`, { decision: 'APPROVED' }, T); // Legal dept has no members → owner
+await req(`${LG}/contracts/${k0.id}/decide`, { decision: 'APPROVED' }, T); // League Owner
+const k1 = await req(`${C}/${k0.id}`, null, T);
+assert(k1.status === 'APPROVED', 'all steps approved → APPROVED');
+await req(`${C}/${k0.id}`, { status: 'SENT', acknowledge: true }, T, 'PATCH');
+await req(`${LG}/contracts/${k0.id}/signed`, { files: [face('Signed agreement', 10)], signedAt: days(0), effectiveFrom: days(0), expiresOn: days(20) }, T);
+const k2 = await req(`${C}/${k0.id}`, null, T);
+assert(k2.status === 'SIGNED' && k2.signedCopies.length === 1, 'signed copy recorded');
+// rejection path
+const nda = await req(C, { templateKey: 'nda', counterparty: 'StreamPlay OTT', values: {} }, T);
+const ndaBody = (await req(`${C}/${nda.id}`, null, T)).body;
+const ndaBlocked = await req(`${LG}/contracts/${nda.id}/submit`, {}, T).then(() => true, () => false);
+assert(!ndaBlocked || !/\[[A-Z ]{3,}\]/.test(ndaBody), 'unfilled placeholders block submission');
+await req(`${C}/${nda.id}`, { body: ndaBody.replace(/\[[A-Z ]{3,}\]/g, 'StreamPlay OTT Pvt Ltd') }, T, 'PATCH');
+await req(`${LG}/contracts/${nda.id}/submit`, {}, T);
+const noNote = await req(`${LG}/contracts/${nda.id}/decide`, { decision: 'REJECTED' }, OPS).then(() => true, () => false);
+assert(!noNote, 'rejection needs a note');
+await req(`${LG}/contracts/${nda.id}/decide`, { decision: 'REJECTED', note: 'Confidentiality period should be 3 years' }, OPS);
+assert((await req(`${C}/${nda.id}`, null, T)).status === 'DRAFT', 'rejected contract returns to draft');
+// vendor compliance documents + expiry alerts
+const ADMIN = await login('admin@sportsiq.in', 'ChangeMe@123');
+const pan = await req('/vendor-portal/documents', { type: 'PAN', number: 'ABCDE1234F', fileUrl: face('PAN', 200) }, V2);
+const gst = await req('/vendor-portal/documents', { type: 'GST', number: '27ABCDE1234F1Z5', fileUrl: face('GST', 210), issuedOn: days(-400), expiresOn: days(5) }, V2);
+await req('/vendor-portal/documents', { type: 'INSURANCE', fileUrl: face('Ins', 220), expiresOn: days(25) }, V12);
+let vd = await req('/vendor-portal/documents', null, V2);
+assert(!vd.compliance.compliant && vd.compliance.items.every((i) => i.status !== 'MISSING'), 'uploaded but unverified docs are pending');
+for (const d of [pan, gst]) await req(`/admin/vendor-documents/${d.id}`, { verified: true }, ADMIN, 'PATCH');
+vd = await req('/vendor-portal/documents', null, V2);
+assert(vd.compliance.compliant, 'verified PAN + GST → compliant');
+const v2id = (await req('/vendors/me/profile', null, V2)).id;
+const pub = await req(`/vendors/${v2id}`, null, T);
+assert(pub.compliance.compliant && !JSON.stringify(pub.compliance).includes('/files/'), 'leagues see status only, never files');
+const jobs1 = await req('/admin/run-jobs', {}, ADMIN);
+const jobs2 = await req('/admin/run-jobs', {}, ADMIN);
+assert(jobs1.sent >= 3 && jobs2.sent === 0, 'expiry alerts sent once per level');
+console.log('legal: contract v' + k2.version, k2.status, '· NDA rejected back to draft · expiry alerts', jobs1.sent);
+
 console.log('DEMO SEASON OK');

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ComplianceBadge } from '../../components/ComplianceBadge';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, BadgeCheck, CheckCircle2, ClipboardList, FileText, Paperclip, Plus, Send, Star, Trophy } from 'lucide-react';
@@ -185,7 +186,7 @@ export function RfqDetail() {
                 <tbody className="divide-y divide-ink-100">
                   {d.quotes.map((q: any) => (
                     <tr key={q.id} className={cx(q.isLowest && 'bg-emerald-50/50', q.status === 'WITHDRAWN' && 'opacity-50')}>
-                      <td className="td"><p className="flex items-center gap-1 font-medium text-ink-900">{q.vendor.companyName}{q.vendor.verified && <BadgeCheck className="h-4 w-4 text-brand-600" />}</p><p className="text-xs text-ink-500">{q.vendor.city} · {q.vendor.rating ? `★ ${q.vendor.rating.toFixed(1)} (${q.vendor.reviewCount})` : 'new vendor'} · {ago(q.updatedAt)}</p></td>
+                      <td className="td"><p className="flex items-center gap-1 font-medium text-ink-900">{q.vendor.companyName}{q.vendor.verified && <BadgeCheck className="h-4 w-4 text-brand-600" />}<ComplianceBadge c={d.compliance?.[q.vendorId]} /></p><p className="text-xs text-ink-500">{q.vendor.city} · {q.vendor.rating ? `★ ${q.vendor.rating.toFixed(1)} (${q.vendor.reviewCount})` : 'new vendor'} · {ago(q.updatedAt)}</p></td>
                       <td className="td text-right">{inr(q.amount)}</td><td className="td text-right">{inr(q.gstAmount)}</td>
                       <td className="td text-right font-bold text-ink-900">{inr(q.total)}{q.isLowest && <Badge color="green" className="ml-1">Lowest</Badge>}{q.overBudget && <Badge color="red" className="ml-1">Over budget</Badge>}</td>
                       <td className="td">{q.timeline}</td>
@@ -207,7 +208,7 @@ export function RfqDetail() {
           </Card>
           <Card title={`Invited (${d.invites.length})`} padded={false}>
             <ul className="divide-y divide-ink-100">{d.invites.map((i: any) => { const q = d.quotes.find((x: any) => x.vendorId === i.vendorId); return (
-              <li key={i.id} className="flex items-center justify-between px-5 py-2.5 text-sm"><span>{i.vendor.companyName}</span>{q ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : i.declined ? <Badge color="red">declined</Badge> : <span className="text-xs text-ink-400">awaiting</span>}</li>
+              <li key={i.id} className="flex items-center justify-between px-5 py-2.5 text-sm"><span className="flex items-center gap-2">{i.vendor.companyName}<ComplianceBadge c={d.compliance?.[i.vendorId]} /></span>{q ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : i.declined ? <Badge color="red">declined</Badge> : <span className="text-xs text-ink-400">awaiting</span>}</li>
             ); })}</ul>
             {pending.length > 0 && <p className="px-5 pb-3 text-xs text-ink-500">{pending.length} vendor{pending.length > 1 ? 's have' : ' has'} not quoted yet.</p>}
           </Card>

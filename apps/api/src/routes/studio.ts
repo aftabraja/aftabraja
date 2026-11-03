@@ -66,7 +66,7 @@ r.get('/contracts/templates', (_req, res) => res.json({
 
 r.get('/contracts', ah(async (req, res) => {
   await assertLeague(me(req), req.params.leagueId, 'staff');
-  res.json(await prisma.contract.findMany({ where: { leagueId: req.params.leagueId }, orderBy: { updatedAt: 'desc' }, select: { id: true, templateKey: true, title: true, counterparty: true, status: true, updatedAt: true } }));
+  res.json(await prisma.contract.findMany({ where: { leagueId: req.params.leagueId }, orderBy: { updatedAt: 'desc' }, select: { id: true, templateKey: true, title: true, counterparty: true, status: true, version: true, expiresOn: true, updatedAt: true } }));
 }));
 
 r.post('/contracts', ah(async (req, res) => {
@@ -88,12 +88,28 @@ r.patch('/contracts/:id', ah(async (req, res) => {
   await assertLeague(me(req), req.params.leagueId, 'staff');
   const d = z.object({
     title: z.string().optional(), body: z.string().optional(), counterparty: z.string().optional(),
-    status: z.enum(['DRAFT', 'UNDER_LEGAL_REVIEW', 'SENT', 'SIGNED', 'ARCHIVED']).optional(), acknowledge: z.boolean().optional(),
+    status: z.enum(['DRAFT', 'SENT', 'ARCHIVED']).optional(), acknowledge: z.boolean().optional(), note: z.string().optional(),
   }).parse(req.body);
-  const { acknowledge, ...rest } = d;
-  const c = await prisma.contract.update({ where: { id: req.params.id, leagueId: req.params.leagueId }, data: { ...rest, ...(acknowledge && { acknowledgedAt: new Date() }) } });
-  if (acknowledge) await audit(me(req).id, 'acknowledge-legal-notice', 'Contract', c.id);
-  res.json({ ...c, disclaimer: LEGAL_DISCLAIMER });
+  const c = await prisma.contract.findFirstOrThrow({ where: { id: req.params.id, leagueId: req.params.leagueId } });
+  const editing = d.title !== undefined || d.body !== undefined || d.counterparty !== undefined;
+  if (editing && c.status !== 'DRAFT') throw new HttpError(400, c.status === 'SIGNED' ? 'Signed contracts are locked' : 'Only drafts can be edited — withdraw it to draft first');
+  if (d.status && d.status !== c.status) {
+    const ok = d.status === 'ARCHIVED'
+      || (d.status === 'DRAFT' && ['UNDER_LEGAL_REVIEW', 'APPROVED', 'SENT'].includes(c.status))
+      || (d.status === 'SENT' && c.status === 'APPROVED');
+    if (!ok) throw new HttpError(400, `Cannot move a ${c.status.toLowerCase().replace(/_/g, ' ')} contract to ${d.status.toLowerCase()}`);
+    if (d.status === 'SENT' && !c.acknowledgedAt && !d.acknowledge) throw new HttpError(400, 'Acknowledge the legal notice before sending');
+  }
+  const bodyChanged = (d.body !== undefined && d.body !== c.body) || (d.title !== undefined && d.title !== c.title);
+  const version = bodyChanged ? c.version + 1 : c.version;
+  const u = await prisma.contract.update({
+    where: { id: c.id },
+    data: { title: d.title, body: d.body, counterparty: d.counterparty, status: d.status, version, ...(d.acknowledge && { acknowledgedAt: new Date() }) },
+  });
+  if (bodyChanged) await prisma.contractVersion.create({ data: { contractId: c.id, version, title: u.title, body: u.body, savedBy: me(req).name, note: d.note } });
+  if (d.acknowledge) await audit(me(req).id, 'acknowledge-legal-notice', 'Contract', c.id);
+  if (d.status && d.status !== c.status) await audit(me(req).id, `status-${d.status.toLowerCase()}`, 'Contract', c.id);
+  res.json({ ...u, disclaimer: LEGAL_DISCLAIMER });
 }));
 
 r.delete('/contracts/:id', ah(async (req, res) => {
@@ -110,7 +126,9 @@ export async function createContractDraft(leagueId: string, templateKey: string,
   const fmt = (x: Date | null) => (x ? x.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
   const role = { franchise: 'Franchisee', player: 'Player', sponsorship: 'Sponsor', vendor: 'Vendor', venue: 'Venue Owner', broadcast: 'Broadcaster', nda: 'Recipient', 'image-release': 'Participant' }[t.key] ?? 'Counterparty';
   const body = fillTemplate(t.body, { league_name: l.name, season_start: fmt(l.startDate), season_end: fmt(l.endDate), counterparty, counterparty_role: role, ...values });
-  return prisma.contract.create({ data: { leagueId, templateKey: t.key, title: `${t.title} — ${counterparty}`, counterparty, body } });
+  const c = await prisma.contract.create({ data: { leagueId, templateKey: t.key, title: `${t.title} — ${counterparty}`, counterparty, body } });
+  await prisma.contractVersion.create({ data: { contractId: c.id, version: 1, title: c.title, body: c.body, savedBy: 'Template', note: `Created from ${t.title}` } });
+  return c;
 }
 
 export default r;

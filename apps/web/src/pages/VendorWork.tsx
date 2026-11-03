@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Image as ImageIcon, Plus, Send, Star, Trash2 } from 'lucide-react';
+import { FileCheck2, Image as ImageIcon, Plus, Send, Star, Trash2 } from 'lucide-react';
 import { del, get, post } from '../lib/api';
 import { ago, date, inr } from '../lib/format';
 import { Avatar, Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, Spinner, Textarea, cx } from '../components/ui';
 import { Attachments, UploadButton, WO_STATUS } from './league/Procurement';
+import { ComplianceBadge } from '../components/ComplianceBadge';
 
 export function VendorRfqs() {
   const qc = useQueryClient();
@@ -182,3 +183,61 @@ export function VendorReviews() {
   );
 }
 
+
+const DOC_COLOR: Record<string, string> = { VALID: 'green', PENDING: 'amber', EXPIRED: 'red', MISSING: 'gray' };
+
+export function VendorCompliance() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['v-docs'], queryFn: () => get('/vendor-portal/documents') });
+  const [f, setF] = useState<any>(null);
+  const add = useMutation({ mutationFn: () => post('/vendor-portal/documents', { type: f.type, number: f.number || undefined, fileUrl: f.fileUrl, issuedOn: f.issuedOn || undefined, expiresOn: f.expiresOn || undefined }), onSuccess: () => { setF(null); qc.invalidateQueries({ queryKey: ['v-docs'] }); } });
+  const remove = useMutation({ mutationFn: (id: string) => del(`/vendor-portal/documents/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ['v-docs'] }) });
+  if (q.isLoading) return <Spinner />;
+  const { types, docs, compliance } = q.data;
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Compliance documents</h2>
+          <p className="text-sm text-ink-500">Leagues see only whether your documents are verified — never the files. We remind you 30 and 7 days before anything expires.</p>
+        </div>
+        <Button onClick={() => setF({ type: compliance.items.find((i: any) => i.status !== 'VALID')?.type ?? 'PAN' })}><Plus className="h-4 w-4" />Upload document</Button>
+      </div>
+      <Card title={<span className="flex items-center gap-2">Required for your categories <ComplianceBadge c={compliance} /></span>}>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {compliance.items.map((i: any) => (
+            <div key={i.type} className="flex items-center justify-between rounded-lg border border-ink-200 px-3 py-2 text-sm">
+              <div><p className="font-medium">{i.label}</p>{i.expiresOn && <p className="text-xs text-ink-500">Expires {date(i.expiresOn)}</p>}</div>
+              <Badge color={DOC_COLOR[i.status]}>{i.status.toLowerCase()}</Badge>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card className="mt-6" title="Uploaded" padded={false}>
+        {!docs.length ? <Empty icon={<FileCheck2 className="h-5 w-5" />} title="Nothing uploaded yet" text="Start with PAN and GST — they are required for every vendor." /> : (
+          <ul className="divide-y divide-ink-100">{docs.map((d: any) => {
+            const expired = d.expiresOn && new Date(d.expiresOn) < new Date();
+            return (
+              <li key={d.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                <div><p className="font-medium">{types[d.type]}{d.number && <span className="ml-2 text-xs text-ink-500">{d.number}</span>}</p><p className="text-xs text-ink-500">{d.issuedOn ? `Issued ${date(d.issuedOn)} · ` : ''}{d.expiresOn ? `Expires ${date(d.expiresOn)}` : 'No expiry'} · <a className="text-brand-700 hover:underline" href={d.fileUrl} target="_blank" rel="noreferrer">View file</a></p></div>
+                <div className="flex items-center gap-2"><Badge color={expired ? 'red' : d.verified ? 'green' : 'amber'}>{expired ? 'expired' : d.verified ? 'verified' : 'awaiting check'}</Badge><button onClick={() => confirm('Delete this document?') && remove.mutate(d.id)} className="p-1.5 text-ink-300 hover:text-red-600" aria-label="Delete"><Trash2 className="h-4 w-4" /></button></div>
+              </li>
+            );
+          })}</ul>
+        )}
+      </Card>
+      <Modal open={!!f} onClose={() => setF(null)} title="Upload compliance document" footer={<><Button variant="secondary" onClick={() => setF(null)}>Cancel</Button><Button disabled={!f?.fileUrl} loading={add.isPending} onClick={() => add.mutate()}>Upload</Button></>}>
+        {f && <div className="grid gap-3">
+          <ErrorText error={add.error} />
+          <Field label="Document"><select className="input" value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>{Object.entries(types).map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}</select></Field>
+          <Field label="Number (optional)"><Input value={f.number ?? ''} onChange={(e) => setF({ ...f, number: e.target.value })} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Issued on"><Input type="date" value={f.issuedOn ?? ''} onChange={(e) => setF({ ...f, issuedOn: e.target.value })} /></Field>
+            <Field label="Expires on"><Input type="date" value={f.expiresOn ?? ''} onChange={(e) => setF({ ...f, expiresOn: e.target.value })} /></Field>
+          </div>
+          <div className="flex items-center gap-2"><UploadButton label={f.fileUrl ? 'File attached ✓' : 'Choose PDF or image'} onAdd={(u) => setF({ ...f, fileUrl: u[0] })} /></div>
+        </div>}
+      </Modal>
+    </>
+  );
+}

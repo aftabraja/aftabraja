@@ -116,6 +116,7 @@ model League {
   endDate     DateTime?
   numTeams    Int          @default(0)
   teamPurse   Int? // INR
+  legalChain  String[] @default(["Operations", "Legal", "League Owner"])
   expenseApprovalLimit Int? // staff expenses above this need owner approval
   status      LeagueStatus @default(DRAFT)
   isPublic    Boolean      @default(true)
@@ -457,6 +458,12 @@ model Contract {
   body           String
   status         String    @default("DRAFT") // DRAFT, UNDER_LEGAL_REVIEW, SENT, SIGNED, ARCHIVED
   acknowledgedAt DateTime? // user confirmed the "verify with a lawyer" notice
+  version        Int       @default(1)
+  signedCopies   String[]  @default([])
+  signedAt       DateTime?
+  effectiveFrom  DateTime?
+  expiresOn      DateTime?
+  alertLevel     String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -1167,4 +1174,56 @@ model PressRelease {
   coverage   Json      @default("[]") // [{ outlet, url, date }]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+}
+
+// ======================= Legal workflow & compliance =======================
+
+model Clause {
+  id        String   @id @default(cuid())
+  leagueId  String
+  title     String
+  tag       String // Payment, Termination, IP, Indemnity, Confidentiality, Force majeure, Integrity, Image rights, Insurance, Disputes, Data protection, Other
+  body      String
+  isDefault Boolean  @default(false)
+  createdBy String?
+  createdAt DateTime @default(now())
+}
+
+model ContractVersion {
+  id         String   @id @default(cuid())
+  contractId String
+  version    Int
+  title      String
+  body       String
+  savedBy    String
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@unique([contractId, version])
+}
+
+model ContractApproval {
+  id         String    @id @default(cuid())
+  contractId String
+  step       Int
+  department String // Operations, Legal, Finance, League Owner…
+  status     String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  decidedBy  String?
+  note       String?
+  decidedAt  DateTime?
+  round      Int       @default(1)
+}
+
+model VendorDocument {
+  id         String    @id @default(cuid())
+  vendorId   String
+  type       String // PAN, GST, FSSAI, TRADE_LICENSE, INSURANCE, FIRE_NOC, POLICE_NOC, MSME, OTHER
+  number     String?
+  fileUrl    String
+  issuedOn   DateTime?
+  expiresOn  DateTime?
+  verified   Boolean   @default(false)
+  verifiedBy String?
+  alertLevel String? // last expiry alert sent: D30, D7, EXPIRED
+  createdAt  DateTime  @default(now())
 }

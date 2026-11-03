@@ -267,3 +267,39 @@ export function AdminEmails() {
     </>
   );
 }
+
+export function AdminVendorDocs() {
+  const qc = useQueryClient();
+  const [filter, setFilter] = useState<'pending' | 'all'>('pending');
+  const q = useQuery({ queryKey: ['admin-vdocs', filter], queryFn: () => get<any[]>(`/admin/vendor-documents${filter === 'pending' ? '?status=pending' : ''}`) });
+  const set = useMutation({ mutationFn: ({ id, verified }: { id: string; verified: boolean }) => patch(`/admin/vendor-documents/${id}`, { verified }), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-vdocs'] }) });
+  const run = useMutation({ mutationFn: () => post('/admin/run-jobs', {}) });
+  return (
+    <>
+      <PageHeader title="Vendor Documents" subtitle="Check each compliance document against the issuing authority before marking it verified. Leagues only see the verified / pending status."
+        actions={<Button variant="secondary" loading={run.isPending} onClick={() => run.mutate()}>Run expiry checks now</Button>} />
+      {run.data && <p className="mb-3 text-sm text-emerald-700">Expiry checks done — {run.data.sent} alert(s) sent.</p>}
+      <Tabs value={filter} onChange={setFilter} tabs={[{ value: 'pending', label: 'Awaiting check' }, { value: 'all', label: 'All documents' }]} />
+      <Card padded={false}>
+        {q.isLoading ? <Spinner /> : (
+          <Table head={['Vendor', 'Document', 'Number', 'Expires', 'Uploaded', 'Status', '']}>
+            {q.data!.map((d) => {
+              const expired = d.expiresOn && new Date(d.expiresOn) < new Date();
+              return (
+                <tr key={d.id}>
+                  <td className="td font-medium text-ink-900">{d.vendorName}</td>
+                  <td className="td"><a className="text-brand-700 hover:underline" href={d.fileUrl} target="_blank" rel="noreferrer">{d.label}</a></td>
+                  <td className="td">{d.number ?? '—'}</td>
+                  <td className="td">{d.expiresOn ? <span className={expired ? 'text-red-700' : ''}>{date(d.expiresOn)}</span> : '—'}</td>
+                  <td className="td">{ago(d.createdAt)}</td>
+                  <td className="td"><Badge color={expired ? 'red' : d.verified ? 'green' : 'amber'}>{expired ? 'expired' : d.verified ? `verified · ${d.verifiedBy}` : 'pending'}</Badge></td>
+                  <td className="td text-right">{d.verified ? <Button size="sm" variant="ghost" onClick={() => set.mutate({ id: d.id, verified: false })}>Unverify</Button> : <Button size="sm" disabled={!!expired} onClick={() => set.mutate({ id: d.id, verified: true })}>Verify</Button>}</td>
+                </tr>
+              );
+            })}
+          </Table>
+        )}
+      </Card>
+    </>
+  );
+}

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { vendorCompliance } from '../lib/compliance.js';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
@@ -103,7 +104,8 @@ r.get('/:id', ah(async (req, res) => {
     },
   });
   if (!v) throw new HttpError(404, 'Vendor not found');
-  res.json(v);
+  const c = await vendorCompliance(v.id);
+  res.json({ ...v, compliance: { compliant: c.compliant, items: c.items.map(({ type, label, status, expiresOn }) => ({ type, label, status, expiresOn })) } });
 }));
 
 export default r;

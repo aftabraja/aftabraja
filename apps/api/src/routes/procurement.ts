@@ -7,6 +7,7 @@ import { assertLeague } from '../lib/access.js';
 import { audit, leagueManagers, notify } from '../lib/notify.js';
 import { createContractDraft } from './studio.js';
 import { defaultMilestones } from '../lib/jersey.js';
+import { DOC_TYPES, vendorCompliance, vendorComplianceMap } from '../lib/compliance.js';
 
 /**
  * Procurement: RFQ → vendor quotes → comparison → award → work order → proofs → completion → review.
@@ -64,7 +65,8 @@ r.get('/rfqs/:id', ah(async (req, res) => {
   const lowest = Math.min(...live.map((q) => q.amount + q.gstAmount));
   const cat = await prisma.vendorCategory.findUnique({ where: { slug: rfq.categorySlug } });
   const wo = await prisma.workOrder.findFirst({ where: { rfqId: rfq.id }, select: { id: true, number: true } });
-  res.json({ ...rfq, categoryName: cat?.name, workOrder: wo, quotes: rfq.quotes.map((q) => ({ ...q, total: q.amount + q.gstAmount, isLowest: q.status !== 'WITHDRAWN' && q.amount + q.gstAmount === lowest, overBudget: !!rfq.budgetMax && q.amount > rfq.budgetMax })) });
+  const comp = await vendorComplianceMap([...rfq.invites.map((i) => i.vendorId), ...rfq.quotes.map((q) => q.vendorId)]);
+  res.json({ ...rfq, compliance: comp, categoryName: cat?.name, workOrder: wo, quotes: rfq.quotes.map((q) => ({ ...q, total: q.amount + q.gstAmount, isLowest: q.status !== 'WITHDRAWN' && q.amount + q.gstAmount === lowest, overBudget: !!rfq.budgetMax && q.amount > rfq.budgetMax })) });
 }));
 
 r.post('/rfqs/:id/invite', ah(async (req, res) => {
@@ -306,3 +308,26 @@ const pfSchema = z.object({ title: z.string().min(2), client: z.string().nullabl
 vendorPortal.get('/portfolio', ah(async (req, res) => { const v = await myVendor(me(req).id); res.json(await prisma.portfolioItem.findMany({ where: { vendorId: v.id }, orderBy: { createdAt: 'desc' } })); }));
 vendorPortal.post('/portfolio', ah(async (req, res) => { const v = await myVendor(me(req).id); const d = pfSchema.parse(req.body); res.status(201).json(await prisma.portfolioItem.create({ data: { ...d, videoUrl: d.videoUrl || null, vendorId: v.id } })); }));
 vendorPortal.delete('/portfolio/:id', ah(async (req, res) => { const v = await myVendor(me(req).id); await prisma.portfolioItem.delete({ where: { id: req.params.id, vendorId: v.id } }); res.json({ ok: true }); }));
+
+// ---------- Compliance documents ----------
+const docSchema = z.object({
+  type: z.enum(Object.keys(DOC_TYPES) as [string, ...string[]]), number: z.string().max(60).optional(), fileUrl: z.string().min(1),
+  issuedOn: z.coerce.date().optional(), expiresOn: z.coerce.date().optional(),
+});
+vendorPortal.get('/documents', ah(async (req, res) => {
+  const v = await myVendor(me(req).id);
+  const docs = await prisma.vendorDocument.findMany({ where: { vendorId: v.id }, orderBy: { createdAt: 'desc' } });
+  res.json({ types: DOC_TYPES, docs, compliance: await vendorCompliance(v.id) });
+}));
+vendorPortal.post('/documents', ah(async (req, res) => {
+  const v = await myVendor(me(req).id);
+  const d = docSchema.parse(req.body);
+  if (!/^\/files\/|^https:\/\//.test(d.fileUrl)) throw new HttpError(400, 'Upload the document file');
+  if (d.issuedOn && d.expiresOn && d.expiresOn <= d.issuedOn) throw new HttpError(400, 'Expiry must be after issue date');
+  res.status(201).json(await prisma.vendorDocument.create({ data: { ...d, vendorId: v.id } }));
+}));
+vendorPortal.delete('/documents/:id', ah(async (req, res) => {
+  const v = await myVendor(me(req).id);
+  await prisma.vendorDocument.delete({ where: { id: req.params.id, vendorId: v.id } });
+  res.json({ ok: true });
+}));
