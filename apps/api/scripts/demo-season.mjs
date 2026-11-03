@@ -237,4 +237,27 @@ assert(sw.reviewCount >= 1, 'vendor rating updated from review');
 const rfq2 = await req(`${P}/procurement/rfqs`, { title: 'Ambulance standby — playoffs', categorySlug: 'medical', specs: 'ALS ambulance with paramedic at the venue for 4 playoff matches, 4 hours each.', quantity: '4 match days', location: 'Wankhede Turf A', neededBy: days(30), inviteAllInCategory: true }, T);
 await req(`/vendor-portal/rfqs/${rfq2.id}/quote`, { amount: 36000, gstAmount: 0, timeline: 'Available on all 4 dates', terms: 'Payment after each match' }, await login('vendor14@demo.sportsiq.in'));
 console.log('procurement: RFQ awarded, work order completed, vendor rated', sw.rating);
+
+// ---- Jersey studio: team owner designs → league approves → printers quote → milestones ----
+const TO = await login('teamowner@demo.sportsiq.in');
+const js = await req(`${P}/jerseys`, null, TO);
+const myTeam = js.teams[0];
+const squadNames = (await req(`${P}/teams`, null, TO))[0].players.map((pl) => pl.player.user.name);
+const design = await req(`${P}/jerseys`, { teamId: myTeam.id, name: `${myTeam.name} — Home kit`, kit: 'HOME', template: 'sash', colors: { body: '#0b3d91', sleeves: '#0a2f6e', collar: '#f59e0b', accent: '#f59e0b', text: '#ffffff' }, sponsors: [{ slot: 'FRONT_CHEST', name: 'FreshBrew' }, { slot: 'SLEEVE_LEFT', name: 'ZipPay' }], sampleName: 'PATIL', sampleNumber: '18', roster: squadNames.map((n, i) => ({ name: n.split(' ').slice(-1)[0].toUpperCase(), number: String(i + 1), size: ['M', 'L', 'XL'][i % 3] })), extraSizes: { M: 2, L: 2 } }, TO);
+const bad = await req(`${P}/jerseys/${design.id}`, { sponsors: [{ slot: 'CHEST_RIGHT', name: 'Rogue' }] }, TO, 'PATCH');
+let blocked = false;
+try { await req(`${P}/jerseys/${design.id}/submit`, {}, TO); } catch { blocked = true; }
+assert(blocked, 'sponsor on the reserved league-logo position is blocked');
+await req(`${P}/jerseys/${design.id}`, { sponsors: [{ slot: 'FRONT_CHEST', name: 'FreshBrew' }, { slot: 'SLEEVE_LEFT', name: 'ZipPay' }] }, TO, 'PATCH');
+await req(`${P}/jerseys/${design.id}/submit`, {}, TO);
+await req(`${P}/jerseys/${design.id}/review`, { decision: 'APPROVE', note: 'Approved — keep sponsor logos in white.' }, T);
+const sent = await req(`${P}/jerseys/${design.id}/send-to-vendors`, { inviteAll: true, specs: 'Approved home kit — see attached production files and roster.', neededBy: days(18), files: [] }, T);
+await req(`/vendor-portal/rfqs/${sent.rfqId}/quote`, { amount: 52000, gstAmount: 2600, timeline: 'Sample 3 days, bulk 10 days' }, V2);
+const jq = (await req(`${P}/procurement/rfqs/${sent.rfqId}`, null, T)).quotes[0];
+const jwo = await req(`${P}/procurement/quotes/${jq.id}/award`, { createContract: false, createExpense: true, expenseCategory: 'Jerseys & Kits' }, T);
+await req(`/vendor-portal/work-orders/${jwo.workOrderId}/milestones/0`, { note: 'Sample couriered' }, V2);
+await req(`${P}/procurement/work-orders/${jwo.workOrderId}/milestones/1`, {}, T);
+await req(`/vendor-portal/work-orders/${jwo.workOrderId}/milestones/2`, {}, V2);
+console.log('jersey: design approved, printer awarded, sample approved, bulk production underway');
+void bad;
 console.log('DEMO SEASON OK');

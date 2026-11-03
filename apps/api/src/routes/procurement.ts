@@ -6,6 +6,7 @@ import { me, requireAuth, requireRole } from '../lib/auth.js';
 import { assertLeague } from '../lib/access.js';
 import { audit, leagueManagers, notify } from '../lib/notify.js';
 import { createContractDraft } from './studio.js';
+import { defaultMilestones } from '../lib/jersey.js';
 
 /**
  * Procurement: RFQ → vendor quotes → comparison → award → work order → proofs → completion → review.
@@ -98,6 +99,7 @@ r.post('/quotes/:qid/award', ah(async (req, res) => {
       leagueId, number: (n._max.number ?? 0) + 1, vendorId: q.vendorId, rfqId: q.rfqId, quoteId: q.id, title: q.rfq.title,
       scope: `${q.rfq.specs}${q.rfq.quantity ? `\nQuantity: ${q.rfq.quantity}` : ''}\n\nVendor terms: ${q.terms ?? '—'}\nTimeline: ${q.timeline}`,
       location: q.rfq.location, dueDate: d.dueDate ?? q.rfq.neededBy, amount: q.amount, gstAmount: q.gstAmount, contactPerson: d.contactPerson, createdById: u.id,
+      milestones: defaultMilestones(q.rfq.categorySlug),
     },
   });
   await prisma.quote.update({ where: { id: q.id }, data: { status: 'ACCEPTED' } });
@@ -165,6 +167,23 @@ r.post('/work-orders/:id/updates', ah(async (req, res) => {
   const msg = { COMMENT: 'New comment', REVISION: 'Changes requested', APPROVE: 'Work approved', CANCEL: 'Work order cancelled', START: 'Work order started' }[d.kind];
   await notify(w.vendor.userId, `WO-${w.number} ${w.title}: ${msg}`, { body: d.body?.slice(0, 140), link: '/vendor?tab=work', type: d.kind === 'REVISION' || d.kind === 'CANCEL' ? 'warning' : 'info' });
   res.status(201).json(await prisma.workOrder.findUniqueOrThrow({ where: { id: w.id }, include: woInclude }));
+}));
+
+/** League confirms approval-type milestones (e.g. "Sample approved") */
+r.post('/work-orders/:id/milestones/:idx', ah(async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const u = me(req);
+  await assertLeague(u, leagueId, 'staff');
+  const w = await prisma.workOrder.findFirstOrThrow({ where: { id: req.params.id, leagueId }, include: { vendor: true } });
+  const ms = (w.milestones as { name: string; doneAt: string | null; proof: string | null; by: string | null }[]) ?? [];
+  const i = Number(req.params.idx);
+  if (!ms[i] || ms[i].doneAt) throw new HttpError(400, 'Milestone not available');
+  if (ms.slice(0, i).some((m) => !m.doneAt)) throw new HttpError(400, 'Earlier milestones are not complete yet');
+  ms[i] = { ...ms[i], doneAt: new Date().toISOString(), proof: null, by: u.name };
+  await prisma.workOrder.update({ where: { id: w.id }, data: { milestones: ms } });
+  await prisma.workOrderUpdate.create({ data: { workOrderId: w.id, authorId: u.id, authorName: u.name, side: 'LEAGUE', kind: 'COMMENT', body: `Milestone confirmed: ${ms[i].name}` } });
+  await notify(w.vendor.userId, `WO-${w.number}: ${ms[i].name}`, { link: '/vendor?tab=work', type: 'success' });
+  res.json(await prisma.workOrder.findUniqueOrThrow({ where: { id: w.id }, include: woInclude }));
 }));
 
 r.post('/work-orders/:id/review', ah(async (req, res) => {
@@ -254,6 +273,27 @@ vendorPortal.post('/work-orders/:id/updates', ah(async (req, res) => {
   const label = { COMMENT: 'New message', PROOF: 'Proof uploaded', START: 'Work started', SUBMIT: 'Ready for your review' }[d.kind];
   await notify(await leagueManagers(w.leagueId), `WO-${w.number} ${w.title}: ${label}`, { body: `${v.companyName}${d.body ? ` — ${d.body.slice(0, 100)}` : ''}`, link: `/leagues/${w.leagueId}/procurement/work-orders/${w.id}`, type: d.kind === 'SUBMIT' ? 'success' : 'info' });
   res.status(201).json({ ok: true });
+}));
+
+/** Vendor marks a delivery milestone done (proof required for the final delivery milestone) */
+vendorPortal.post('/work-orders/:id/milestones/:idx', ah(async (req, res) => {
+  const u = me(req);
+  const v = await myVendor(u.id);
+  const { proof, note } = z.object({ proof: z.string().optional(), note: z.string().optional() }).parse(req.body);
+  const w = await prisma.workOrder.findFirst({ where: { id: req.params.id, vendorId: v.id } });
+  if (!w) throw new HttpError(404, 'Work order not found');
+  const ms = (w.milestones as { name: string; doneAt: string | null; proof: string | null; by: string | null }[]) ?? [];
+  const i = Number(req.params.idx);
+  if (!ms[i]) throw new HttpError(404, 'Milestone not found');
+  if (ms[i].doneAt) throw new HttpError(400, 'Already completed');
+  if (ms.slice(0, i).some((m) => !m.doneAt)) throw new HttpError(400, 'Complete the earlier milestones first');
+  if (/approved/i.test(ms[i].name)) throw new HttpError(400, 'The league confirms approval milestones');
+  if (i === ms.length - 1 && !proof) throw new HttpError(400, 'Upload proof of delivery');
+  ms[i] = { ...ms[i], doneAt: new Date().toISOString(), proof: proof ?? null, by: v.companyName };
+  await prisma.workOrder.update({ where: { id: w.id }, data: { milestones: ms, ...(w.status === 'NOT_STARTED' && { status: 'IN_PROGRESS' }) } });
+  await prisma.workOrderUpdate.create({ data: { workOrderId: w.id, authorId: u.id, authorName: v.companyName, side: 'VENDOR', kind: proof ? 'PROOF' : 'COMMENT', body: `Milestone: ${ms[i].name}${note ? ` — ${note}` : ''}`, attachments: proof ? [proof] : [] } });
+  await notify(await leagueManagers(w.leagueId), `WO-${w.number}: ${ms[i].name}`, { body: v.companyName, link: `/leagues/${w.leagueId}/procurement/work-orders/${w.id}`, type: 'info' });
+  res.json({ ok: true });
 }));
 
 vendorPortal.get('/reviews', ah(async (req, res) => {

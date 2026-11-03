@@ -476,7 +476,10 @@ export const PLAYBOOK: PlaybookPhase[] = [
         description: 'Home/away kits per team with mandatory league logo and sponsor logo positions as per sponsorship contracts.',
         owner: 'Branding',
         critical: true,
-        actions: [{ type: 'vendor', label: 'Find jersey designers', category: 'jersey-design' }],
+        actions: [
+          { type: 'page', label: 'Open Jersey Studio', route: 'jerseys' },
+          { type: 'vendor', label: 'Find jersey designers', category: 'jersey-design' },
+        ],
       },
       {
         key: 'jersey-printing',
@@ -484,7 +487,10 @@ export const PLAYBOOK: PlaybookPhase[] = [
         description: 'Send approved design with size-wise quantities to printers, approve sample, track bulk production and delivery.',
         owner: 'Branding',
         critical: true,
-        actions: [{ type: 'vendor', label: 'Find jersey printers', category: 'jersey-printing' }],
+        actions: [
+          { type: 'page', label: 'Send approved kits to printers', route: 'jerseys' },
+          { type: 'vendor', label: 'Find jersey printers', category: 'jersey-printing' },
+        ],
       },
       {
         key: 'trophies',

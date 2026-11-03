@@ -241,6 +241,7 @@ export function WorkOrderDetail() {
   const [rate, setRate] = useState({ quality: 5, onTime: 5, value: 5, comment: '' });
   const upd = useMutation({ mutationFn: (kind: string) => post(`/leagues/${leagueId}/procurement/work-orders/${wid}/updates`, { kind, body: body || undefined, attachments: files }), onSuccess: (v) => { setBody(''); setFiles([]); qc.setQueryData(key, (o: any) => ({ ...o, ...v })); qc.invalidateQueries({ queryKey: ['work-orders', leagueId] }); } });
   const review = useMutation({ mutationFn: () => post(`/leagues/${leagueId}/procurement/work-orders/${wid}/review`, rate), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
+  const ms = useMutation({ mutationFn: (i: number) => post(`/leagues/${leagueId}/procurement/work-orders/${wid}/milestones/${i}`), onSuccess: (v) => qc.setQueryData(key, (o: any) => ({ ...o, ...v })) });
   if (w.isLoading) return <Spinner />;
   const d = w.data;
   const closed = ['COMPLETED', 'CANCELLED'].includes(d.status);
@@ -279,6 +280,20 @@ export function WorkOrderDetail() {
           )}
         </Card>
         <div className="space-y-4">
+          {d.milestones?.length > 0 && (
+            <Card title="Delivery milestones">
+              <ol className="space-y-2">{d.milestones.map((m: any, i: number) => {
+                const next = !m.doneAt && d.milestones.slice(0, i).every((x: any) => x.doneAt);
+                return (
+                  <li key={i} className="flex items-start gap-3 text-sm">
+                    <span className={cx('mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold', m.doneAt ? 'bg-emerald-500 text-white' : next ? 'bg-brand-600 text-white' : 'bg-ink-100 text-ink-500')}>{m.doneAt ? '✓' : i + 1}</span>
+                    <span className="min-w-0 flex-1"><span className={cx(m.doneAt ? 'text-ink-900' : 'text-ink-500')}>{m.name}</span>{m.doneAt && <span className="block text-xs text-ink-400">{m.by} · {ago(m.doneAt)}</span>}{m.proof && <Attachments urls={[m.proof]} />}</span>
+                    {next && /approved/i.test(m.name) && !closed && <Button size="sm" variant="success" onClick={() => ms.mutate(i)}>Confirm</Button>}
+                  </li>
+                );
+              })}</ol>
+            </Card>
+          )}
           <Card title="Scope"><p className="whitespace-pre-wrap text-sm text-ink-700">{d.scope}</p>{d.location && <p className="mt-2 text-sm"><b>Location:</b> {d.location}</p>}{d.contactPerson && <p className="text-sm"><b>Contact:</b> {d.contactPerson}</p>}</Card>
           {d.expenseId && <Card><p className="text-sm">Recorded as a payable expense. <Link to={`/leagues/${leagueId}/finance`} className="font-semibold text-brand-700 hover:underline">Open finance →</Link></p></Card>}
           {d.status === 'COMPLETED' && (

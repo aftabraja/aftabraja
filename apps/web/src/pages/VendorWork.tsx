@@ -67,6 +67,7 @@ export function VendorWorkOrders() {
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<string[]>([]);
   const upd = useMutation({ mutationFn: ({ id, kind }: any) => post(`/vendor-portal/work-orders/${id}/updates`, { kind, body: body || undefined, attachments: files }), onSuccess: () => { setBody(''); setFiles([]); qc.invalidateQueries({ queryKey: ['v-wos'] }); } });
+  const ms = useMutation({ mutationFn: ({ id, i, proof }: any) => post(`/vendor-portal/work-orders/${id}/milestones/${i}`, { proof }), onSuccess: () => qc.invalidateQueries({ queryKey: ['v-wos'] }) });
   if (list.isLoading) return <Spinner />;
   if (!list.data?.length) return <Card><Empty title="No work orders yet" text="When a league awards you a quote, the work order appears here." /></Card>;
   return (
@@ -85,6 +86,26 @@ export function VendorWorkOrders() {
             {isOpen && (
               <div className="border-t border-ink-100 p-5">
                 <p className="whitespace-pre-wrap text-sm text-ink-700">{w.scope}</p>
+                {w.milestones?.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-ink-200 p-3">
+                    <p className="label">Milestones</p>
+                    <ol className="space-y-2">{w.milestones.map((m: any, i: number) => {
+                      const next = !m.doneAt && w.milestones.slice(0, i).every((x: any) => x.doneAt);
+                      const last = i === w.milestones.length - 1;
+                      const approval = /approved/i.test(m.name);
+                      return (
+                        <li key={i} className="flex items-center gap-3 text-sm">
+                          <span className={cx('flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold', m.doneAt ? 'bg-emerald-500 text-white' : next ? 'bg-brand-600 text-white' : 'bg-ink-100 text-ink-500')}>{m.doneAt ? '✓' : i + 1}</span>
+                          <span className="flex-1">{m.name}{m.doneAt && <span className="ml-2 text-xs text-ink-400">{ago(m.doneAt)}</span>}</span>
+                          {next && !closed && (approval ? <span className="text-xs text-ink-500">Waiting for league</span> : last
+                            ? <UploadButton label="Upload proof of delivery & complete" onAdd={(a) => ms.mutate({ id: w.id, i, proof: a[0] })} />
+                            : <Button size="sm" variant="secondary" loading={ms.isPending} onClick={() => ms.mutate({ id: w.id, i })}>Mark done</Button>)}
+                        </li>
+                      );
+                    })}</ol>
+                    <ErrorText error={ms.error} />
+                  </div>
+                )}
                 <ol className="mt-4 space-y-3">
                   {w.updates.map((u: any) => (
                     <li key={u.id} className={cx('rounded-lg border p-3 text-sm', u.kind === 'REVISION' ? 'border-amber-300 bg-amber-50' : u.side === 'LEAGUE' ? 'border-ink-200' : 'border-brand-100 bg-brand-50/40')}>

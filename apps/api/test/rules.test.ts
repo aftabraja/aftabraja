@@ -32,3 +32,23 @@ test('report exports: Indian formatting, CSV totals and BOM', () => {
 test('every playbook vendor action points to a real vendor category', () => {
   for (const s of ALL_STEPS) for (const a of s.actions) if (a.type === 'vendor') assert.ok(CATEGORY_SLUGS.has(a.category), `${s.key} → ${a.category}`);
 });
+
+import { checkJersey, contrast, defaultMilestones } from '../src/lib/jersey.ts';
+
+test('jersey rules: reserved slots, duplicates, contrast', () => {
+  const rules = { leagueLogoSlot: 'CHEST_RIGHT', teamLogoSlot: 'CHEST_LEFT', sponsorSlots: ['FRONT_CHEST', 'SLEEVE_LEFT'] };
+  const ok = { teamId: 't', colors: { body: '#1d4ed8', text: '#ffffff' }, sponsors: [{ slot: 'FRONT_CHEST', name: 'FreshBrew', logoUrl: '/files/a.png' }], roster: [{}] };
+  assert.equal(checkJersey(ok, rules, true).filter((i) => i.level === 'error').length, 0);
+  const bad = { ...ok, colors: { body: '#ffff00', text: '#ffffff' }, sponsors: [{ slot: 'CHEST_RIGHT', name: 'X' }, { slot: 'BACK_TOP', name: 'Y' }] };
+  const errs = checkJersey(bad, rules, false).filter((i) => i.level === 'error').map((i) => i.message).join(' | ');
+  assert.match(errs, /league logo/i);
+  assert.match(errs, /reserved/);
+  assert.match(errs, /not allowed/);
+  assert.match(errs, /hard to read/);
+  assert.ok(contrast('#000000', '#ffffff') > 20);
+});
+
+test('work order milestones by category', () => {
+  assert.equal(defaultMilestones('jersey-printing').length, 5);
+  assert.equal(defaultMilestones('umpires').length, 2);
+});

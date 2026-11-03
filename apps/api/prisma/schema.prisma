@@ -966,6 +966,7 @@ model WorkOrder {
   completedAt  DateTime?
   expenseId    String?
   contractId   String?
+  milestones   Json      @default("[]") // [{ name, doneAt, proof, by }]
   createdById  String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -1015,4 +1016,41 @@ model PortfolioItem {
   imageUrl    String?
   videoUrl    String?
   createdAt   DateTime @default(now())
+}
+
+// ======================= Jersey studio =======================
+
+model JerseyRules {
+  id             String   @id @default(cuid())
+  leagueId       String   @unique
+  leagueLogoSlot String   @default("CHEST_RIGHT")
+  teamLogoSlot   String   @default("CHEST_LEFT")
+  sponsorSlots   String[] @default(["FRONT_CHEST", "SLEEVE_LEFT", "SLEEVE_RIGHT", "LOWER_FRONT", "BACK_TOP", "BACK_BOTTOM"])
+  maxSizes       Json     @default("{}") // slot -> "25 x 10 cm"
+  notes          String?
+  updatedAt      DateTime @updatedAt
+}
+
+model JerseyDesign {
+  id          String    @id @default(cuid())
+  leagueId    String
+  teamId      String?
+  name        String
+  kit         String    @default("HOME") // HOME, AWAY, ALTERNATE, TRAINING
+  template    String    @default("classic") // classic, sash, panels, hoops, gradient, chevron
+  colors      Json // { body, sleeves, collar, accent, text }
+  sponsors    Json      @default("[]") // [{ slot, name, logoUrl, opportunityId? }]
+  sampleName  String    @default("PLAYER")
+  sampleNumber String   @default("10")
+  roster      Json      @default("[]") // [{ name, number, size }]
+  extraSizes  Json      @default("{}") // { S: 2, M: 4 } spares
+  status      String    @default("DRAFT") // DRAFT, SUBMITTED, CHANGES_REQUESTED, APPROVED
+  reviewNote  String?
+  version     Int       @default(1)
+  rfqId       String?
+  createdById String
+  approvedById String?
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
