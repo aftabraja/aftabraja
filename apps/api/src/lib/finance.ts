@@ -10,12 +10,14 @@ const inPeriod = (p: Period) => ({ ...(p.from || p.to ? { date: { ...(p.from && 
  * - Ticket sales made through SportsIQ are included automatically (no double entry needed).
  */
 export async function financeSummary(leagueId: string, period: Period = {}) {
-  const [expensesAll, incomes, budgets, ticketOrders] = await Promise.all([
+  const [expensesAll, incomes, budgets, ticketOrders, regFees] = await Promise.all([
     prisma.expense.findMany({ where: { leagueId, ...inPeriod(period) }, orderBy: { date: 'desc' }, include: { vendor: { select: { id: true, companyName: true } } } }),
     prisma.income.findMany({ where: { leagueId, ...inPeriod(period) }, orderBy: { date: 'desc' } }),
     prisma.budgetLine.findMany({ where: { leagueId } }),
     prisma.ticketOrder.findMany({ where: { status: 'PAID', category: { leagueId }, ...(period.from || period.to ? { createdAt: { ...(period.from && { gte: period.from }), ...(period.to && { lte: period.to }) } } : {}) }, include: { category: { select: { name: true } } } }),
+    prisma.playerRegistration.findMany({ where: { leagueId, feeStatus: 'PAID', feePaid: { gt: 0 }, ...(period.from || period.to ? { createdAt: { ...(period.from && { gte: period.from }), ...(period.to && { lte: period.to }) } } : {}) }, select: { feePaid: true, createdAt: true } }),
   ]);
+  const regFeeRevenue = regFees.reduce((s, g) => s + (g.feePaid ?? 0), 0);
   const expenses = expensesAll.filter((e) => e.approval === 'APPROVED');
   const pendingApproval = expensesAll.filter((e) => e.approval === 'PENDING_APPROVAL');
   const ticketRevenue = ticketOrders.reduce((s, o) => s + o.amount, 0);
@@ -29,9 +31,10 @@ export async function financeSummary(leagueId: string, period: Period = {}) {
 
   const incomeBySource = group(incomes, (i) => i.source, (i) => i.amount);
   if (ticketRevenue) incomeBySource.push({ key: 'Ticketing (SportsIQ sales)', amount: ticketRevenue });
+  if (regFeeRevenue) incomeBySource.push({ key: 'Player registration fees', amount: regFeeRevenue });
   incomeBySource.sort((a, b) => b.amount - a.amount);
   const expenseByCategory = group(expenses, (e) => e.category, (e) => e.amount);
-  const totalIncome = sum(incomes, (i) => i.amount) + ticketRevenue;
+  const totalIncome = sum(incomes, (i) => i.amount) + ticketRevenue + regFeeRevenue;
   const totalExpense = sum(expenses, (e) => e.amount);
 
   const cats = new Set([...budgets.map((b) => b.category), ...expenseByCategory.map((x) => x.key)]);
@@ -48,6 +51,7 @@ export async function financeSummary(leagueId: string, period: Period = {}) {
   const bump = (d: Date, k: 'income' | 'expense', v: number) => { const m = mk(d); const r = months.get(m) ?? { month: m, income: 0, expense: 0 }; r[k] += v; months.set(m, r); };
   incomes.forEach((i) => bump(i.date, 'income', i.amount));
   ticketOrders.forEach((o) => bump(o.createdAt, 'income', o.amount));
+  regFees.forEach((g) => bump(g.createdAt, 'income', g.feePaid ?? 0));
   expenses.forEach((e) => bump(e.date, 'expense', e.amount));
   const monthly = [...months.values()].sort((a, b) => a.month.localeCompare(b.month)).map((m) => ({ ...m, net: m.income - m.expense }));
 
@@ -66,7 +70,7 @@ export async function financeSummary(leagueId: string, period: Period = {}) {
       pendingApproval: sum(pendingApproval, (e) => e.amount),
       pendingApprovalCount: pendingApproval.length,
       plannedBudget: sum(budgets, (b) => b.planned),
-      ticketRevenue,
+      ticketRevenue, regFeeRevenue,
       gst: { output: gstOutput, input: gstInput, net: gstOutput - gstInput },
       tdsDeducted: sum(expenses, (e) => e.tdsAmount),
     },

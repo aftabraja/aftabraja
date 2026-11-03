@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { PlayerRegistrations } from './PlayerRegs';
 import { VendorCompliance, VendorPortfolio, VendorReviews, VendorRfqs, VendorWorkOrders } from './VendorWork';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BadgeCheck, CalendarDays, CheckCircle2, MapPin, Pencil, Plus, Star, Trash2, Trophy } from 'lucide-react';
@@ -205,7 +206,7 @@ export function PlayerHome() {
   const [f, setF] = useState<any>(null);
   useEffect(() => { if (p.data && !f) setF({ ...p.data, dob: dateInput(p.data.dob) }); }, [p.data, f]);
   const save = useMutation({ mutationFn: () => patch('/players/me', { dob: f.dob || null, city: f.city, state: f.state, playingRole: f.playingRole, battingStyle: f.battingStyle, bowlingStyle: f.bowlingStyle, bio: f.bio, matches: f.matches, runs: f.runs, wickets: f.wickets, videoUrl: f.videoUrl }), onSuccess: () => qc.invalidateQueries({ queryKey: ['my-player'] }) });
-  const register = useMutation({ mutationFn: (id: string) => post(`/players/register/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ['my-player'] }) });
+  const register = useMutation({ mutationFn: (id: string) => post(`/players/register/${id}`), onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-player'] }); qc.invalidateQueries({ queryKey: ['my-regs'] }); } });
   if (!f) return <Spinner />;
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
   const registered = new Set(p.data.registrations.map((r: any) => r.leagueId));
@@ -231,26 +232,14 @@ export function PlayerHome() {
         </Card>
         <div className="space-y-6">
           <PlayerTrials />
-          <Card title="My registrations" padded={false}>
-            {!p.data.registrations.length ? <Empty title="Not registered yet" text="Register for an open league below." /> : (
-              <ul className="divide-y divide-ink-100">
-                {p.data.registrations.map((r: any) => (
-                  <li key={r.id} className="flex items-center gap-3 px-5 py-3">
-                    <Avatar name={r.league.name} src={r.league.logoUrl} size={36} />
-                    <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{r.league.name}</p><p className="text-xs text-ink-500">{r.team ? `Picked by ${r.team.name}` : date(r.league.startDate)}</p></div>
-                    <StatusBadge status={r.status} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+          <PlayerRegistrations />
           <Card title="Open leagues" padded={false}>
             {!open.data?.length ? <Empty title="No open leagues right now" /> : (
               <ul className="divide-y divide-ink-100">
                 {open.data.map((l) => (
                   <li key={l.id} className="flex items-center gap-3 px-5 py-3">
                     <Avatar name={l.name} src={l.logoUrl} size={36} />
-                    <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{l.name}</p><p className="text-xs text-ink-500">{[l.format, l.city, date(l.startDate)].filter(Boolean).join(' · ')}</p></div>
+                    <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{l.name}</p><p className="text-xs text-ink-500">{[l.format, l.city, date(l.startDate), l.regFee ? `fee ₹${l.regFee.toLocaleString('en-IN')}` : 'free', l.regClosesAt && `closes ${date(l.regClosesAt)}`].filter(Boolean).join(' · ')}</p></div>
                     {registered.has(l.id) ? <Badge color="green">Registered</Badge> : <Button size="sm" loading={register.isPending && register.variables === l.id} onClick={() => register.mutate(l.id)}>Register</Button>}
                   </li>
                 ))}

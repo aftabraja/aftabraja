@@ -118,6 +118,13 @@ model League {
   teamPurse   Int? // INR
   legalChain  String[] @default(["Operations", "Legal", "League Owner"])
   expenseApprovalLimit Int? // staff expenses above this need owner approval
+  regOpensAt   DateTime? // player registration window
+  regClosesAt  DateTime?
+  regFee       Int       @default(0) // INR, player registration fee (0 = free)
+  regMaxPlayers Int?
+  regDocs      String[]  @default(["ID_PROOF", "AGE_PROOF"]) // documents players must upload
+  minAge       Int?
+  maxAge       Int?
   status      LeagueStatus @default(DRAFT)
   isPublic    Boolean      @default(true)
   ownerId     String
@@ -190,6 +197,7 @@ model Team {
 
   owners  TeamOwner[]
   players PlayerRegistration[]
+  staff   TeamStaff[]
   homeMatches Match[] @relation("HomeMatches")
   awayMatches Match[] @relation("AwayMatches")
 }
@@ -238,7 +246,14 @@ model PlayerRegistration {
   soldPrice  Int?
   teamId     String?
   team       Team?              @relation(fields: [teamId], references: [id])
+  acquiredVia    String? // AUCTION, RETAINED, RTM, DRAFT, DIRECT
+  previousTeamId String? // franchise the player represented last season (retention / RTM)
+  feeStatus  String?            // null = no fee, PENDING, PAID, WAIVED
+  feePaid    Int?
+  kycStatus  String             @default("PENDING") // PENDING, SUBMITTED, VERIFIED, REJECTED
+  kycNote    String?
   createdAt  DateTime           @default(now())
+  documents  PlayerDocument[]
 
   @@unique([leagueId, playerId])
 }
@@ -543,6 +558,15 @@ model Auction {
   timerSeconds Int       @default(30)
   minSquad     Int       @default(11)
   maxSquad     Int       @default(16)
+  maxOverseas  Int?      // overseas players allowed per squad (null = no limit)
+  roleMins     Json      @default("{}") // e.g. {"Wicket-keeper":1,"Bowler":4}
+  mode         String    @default("AUCTION") // AUCTION or DRAFT
+  maxRetentions Int      @default(0)
+  rtmCards     Int       @default(0) // right-to-match cards per team
+  rtmTeamId    String?   // team currently being offered RTM on the podium player
+  draftOrder   String[]  @default([])
+  draftSnake   Boolean   @default(true)
+  draftPrices  Json      @default("{}") // category → fixed salary in draft mode
   currentRegId String?
   currentBid   Int?
   currentTeamId String?
@@ -1226,4 +1250,28 @@ model VendorDocument {
   verifiedBy String?
   alertLevel String? // last expiry alert sent: D30, D7, EXPIRED
   createdAt  DateTime  @default(now())
+}
+
+model TeamStaff {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name      String
+  role      String // Head Coach, Assistant Coach, Team Manager, Physio, Trainer, Analyst, Logistics, Media
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now())
+}
+
+model PlayerDocument {
+  id         String             @id @default(cuid())
+  regId      String
+  reg        PlayerRegistration @relation(fields: [regId], references: [id], onDelete: Cascade)
+  type       String // ID_PROOF, AGE_PROOF, NOC, ADDRESS_PROOF, PHOTO, MEDICAL
+  number     String?
+  fileUrl    String
+  status     String   @default("PENDING") // PENDING, VERIFIED, REJECTED
+  note       String?
+  reviewedBy String?
+  createdAt  DateTime @default(now())
 }

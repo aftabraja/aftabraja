@@ -14,8 +14,12 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
 let seed = 7;
 const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 const login = async (email, password = 'Demo@1234') => (await req('/auth/login', { email, password })).token;
+const days = (n) => new Date(Date.now() + n * 864e5).toISOString();
+const face = (name, hue) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 150"><rect width="120" height="150" fill="hsl(${hue},45%,88%)"/><circle cx="60" cy="58" r="28" fill="hsl(${hue},30%,55%)"/><path d="M14 150c4-34 24-50 46-50s42 16 46 50z" fill="hsl(${hue},30%,45%)"/><text x="60" y="64" font-family="Arial" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">${name.split(' ').map((w) => w[0]).join('').slice(0, 2)}</text></svg>`).toString('base64');
+let opsTok; const OPS0 = () => opsTok;
 
 const T = await login('owner@demo.sportsiq.in');
+opsTok = await login('ops@demo.sportsiq.in');
 const L = (await req('/leagues', null, T)).find((l) => l.slug === 'clt10');
 const P = `/leagues/${L.id}`;
 const teams = await req(`${P}/teams`, null, T);
@@ -47,9 +51,63 @@ for (const [i, e] of td.entries.entries()) {
 }
 console.log('trial entries:', td.entries.length);
 
-// ---- Auction ----
-await req(`${P}/auction`, { bidIncrement: 25000, timerSeconds: 30, minSquad: 4, maxSquad: 8 }, T, 'PATCH');
+// ---- Registration rules, KYC and fees ----
+const TO0 = await login('teamowner@demo.sportsiq.in');
+await req(`${P}/squads/settings`, { regOpensAt: days(-10), regClosesAt: days(20), regFee: 500, regDocs: ['ID_PROOF', 'AGE_PROOF'], minAge: 16 }, T, 'PATCH');
+const late = await (async () => { try { return (await req('/auth/register', { name: 'Kiran Patil', email: 'p200@demo.sportsiq.in', password: 'Demo@1234', role: 'PLAYER', city: 'Pune', playingRole: 'Wicket-keeper', acceptTerms: true })).token; } catch { return login('p200@demo.sportsiq.in'); } })();
+const noDob = await req(`/players/register/${L.id}`, {}, late).then(() => true, () => false);
+assert(!noDob, 'age-limited league needs a date of birth');
+await req('/players/me', { dob: '2001-04-12' }, late, 'PATCH');
+const lreg = await req(`/players/register/${L.id}`, {}, late);
+assert(lreg.feeStatus === 'PENDING' && lreg.kycStatus === 'PENDING', 'fee and KYC pending after registering');
+const earlyShort = await req(`${P}/registrations/${lreg.id}`, { status: 'SHORTLISTED' }, T, 'PATCH').then(() => true, () => false);
+assert(!earlyShort, 'cannot shortlist with fee pending');
+const idDoc = await req(`/players/registrations/${lreg.id}/documents`, { type: 'ID_PROOF', fileUrl: face('ID', 15) }, late);
+const ageDoc = await req(`/players/registrations/${lreg.id}/documents`, { type: 'AGE_PROOF', fileUrl: face('Age', 25) }, late);
+await req(`${P}/squads/documents/${idDoc.id}`, { status: 'VERIFIED' }, OPS0(), 'PATCH');
+const rej = await req(`${P}/squads/documents/${ageDoc.id}`, { status: 'REJECTED', note: 'Photo is blurred' }, T, 'PATCH');
+assert(rej.kycStatus === 'REJECTED', 'a rejected document rejects KYC');
+const age2 = await req(`/players/registrations/${lreg.id}/documents`, { type: 'AGE_PROOF', fileUrl: face('Age2', 35) }, late);
+const kycOk = await req(`${P}/squads/documents/${age2.id}`, { status: 'VERIFIED' }, T, 'PATCH');
+assert(kycOk.kycStatus === 'VERIFIED', 'all required documents verified → KYC verified');
+const payInit = await req(`/players/registrations/${lreg.id}/pay`, {}, late);
+await req('/payments/verify', { paymentId: payInit.paymentId }, late);
+await req(`${P}/registrations/${lreg.id}`, { status: 'SHORTLISTED', category: 'B', basePrice: 50000 }, T, 'PATCH');
+console.log('registration: fee paid + KYC verified for', 'Kiran Patil');
+
+// ---- Team staff ----
+const ownTeam = (await req(`${P}/teams`, null, TO0))[0];
+const otherTeam = teams.find((t) => t.id !== ownTeam.id);
+await req(`${P}/squads/teams/${ownTeam.id}/staff`, { name: 'Sunil Kale', role: 'Head Coach', phone: '9820000001' }, TO0);
+await req(`${P}/squads/teams/${ownTeam.id}/staff`, { name: 'Dr. Meera Iyer', role: 'Physio' }, TO0);
+const foreign = await req(`${P}/squads/teams/${otherTeam.id}/staff`, { name: 'X Y', role: 'Analyst' }, TO0).then(() => true, () => false);
+assert(!foreign, "team owners cannot edit another team's staff");
+for (const [i, t] of teams.entries()) await req(`${P}/squads/teams/${t.id}/staff`, { name: `${['Ravi', 'Amol', 'Nitin', 'Faisal', 'Deepak', 'Manoj', 'Ajay', 'Vikram'][i % 8]} ${['Pandit', 'More', 'Rao', 'Khan', 'Shetty', 'Joshi', 'Nair', 'Sood'][i % 8]}`, role: 'Head Coach' }, T).catch(() => {});
+
+// ---- Squad rules, retentions and RTM ----
+const pool0 = (await req(`${P}/registrations`, null, T)).filter((g) => g.status === 'SHORTLISTED');
+const overseas = pool0.slice(4, 7);
+for (const g of overseas) await req(`${P}/registrations/${g.id}`, { isOverseas: true }, T, 'PATCH');
+const prevMine = pool0.slice(7, 9), prevOther = pool0.slice(9, 10);
+for (const g of prevMine) await req(`${P}/registrations/${g.id}`, { previousTeamId: ownTeam.id }, T, 'PATCH');
+for (const g of prevOther) await req(`${P}/registrations/${g.id}`, { previousTeamId: otherTeam.id }, T, 'PATCH');
+await req(`${P}/auction`, { bidIncrement: 25000, timerSeconds: 30, minSquad: 4, maxSquad: 8, maxOverseas: 1, roleMins: { 'Wicket-keeper': 1 }, maxRetentions: 1, rtmCards: 1 }, T, 'PATCH');
+const ret = await req(`${P}/squads/teams/${ownTeam.id}/retain`, { regId: prevMine[0].id, price: prevMine[0].basePrice }, TO0);
+assert(ret.acquiredVia === 'RETAINED', 'team retains its own player');
+const over = await req(`${P}/squads/teams/${ownTeam.id}/retain`, { regId: prevMine[1].id, price: 100000 }, TO0).then(() => true, () => false);
+assert(!over, 'retention limit enforced');
+const steal = await req(`${P}/squads/teams/${ownTeam.id}/retain`, { regId: prevOther[0].id, price: 100000 }, TO0).then(() => true, () => false);
+assert(!steal, "cannot retain another team's player");
 await req(`${P}/auction/status`, { status: 'LIVE' }, T);
+// RTM: another team wins prevMine[1]; my team matches the price
+let rs = await req(`${P}/auction/next`, { regId: prevMine[1].id }, T);
+const bidder = rs.teams.find((t) => t.id !== ownTeam.id && rs.current.eligibleTeams.includes(t.id));
+await req(`${P}/auction/bid`, { teamId: bidder.id }, T);
+rs = await req(`${P}/auction/sell`, {}, T);
+assert(rs.rtm && rs.rtm.teamId === ownTeam.id, 'previous team is offered right to match');
+rs = await req(`${P}/auction/rtm`, { use: true }, TO0);
+assert(rs.teams.find((t) => t.id === ownTeam.id).rtmLeft === 0, 'RTM card used');
+
 let sold = 0;
 for (let k = 0; k < 32; k++) {
   const s = await req(`${P}/auction/next`, {}, T);
@@ -62,8 +120,14 @@ for (let k = 0; k < 32; k++) {
     if (t.id === last) continue;
     try { await req(`${P}/auction/bid`, { teamId: t.id }, T); last = t.id; } catch { /* purse limit */ }
   }
-  if (last) { await req(`${P}/auction/sell`, {}, T); sold++; } else await req(`${P}/auction/unsold`, {}, T);
+  if (last) {
+    const after = await req(`${P}/auction/sell`, {}, T);
+    if (after.rtm) await req(`${P}/auction/rtm`, { use: rnd() < 0.5 }, T);
+    sold++;
+  } else await req(`${P}/auction/unsold`, {}, T);
 }
+const boards = (await req(`${P}/auction`, null, T)).teams;
+assert(boards.every((t) => t.overseas <= 1), 'overseas cap respected');
 // leave one player on the podium with a live bid for the demo
 const live = await req(`${P}/auction/next`, {}, T).catch(() => null);
 if (live?.current) await req(`${P}/auction/bid`, { teamId: live.teams[1].id }, T).catch(() => {});
@@ -145,7 +209,6 @@ for (let k = 0; k < 12; k++) {
 await req(`${P}/accreditation`, null, T);
 for (const s of ['MANAGEMENT', 'SQUADS', 'TEAM_OWNERS']) await req(`${P}/accreditation/bulk`, { source: s }, T);
 const ac = await req(`${P}/accreditation`, null, T);
-const face = (name, hue) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 150"><rect width="120" height="150" fill="hsl(${hue},45%,88%)"/><circle cx="60" cy="58" r="28" fill="hsl(${hue},30%,55%)"/><path d="M14 150c4-34 24-50 46-50s42 16 46 50z" fill="hsl(${hue},30%,45%)"/><text x="60" y="64" font-family="Arial" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">${name.split(' ').map((w) => w[0]).join('').slice(0, 2)}</text></svg>`).toString('base64');
 const ids = [];
 for (const [i, a] of ac.accreditations.slice(0, 18).entries()) {
   await req(`${P}/accreditation/${a.id}`, { photoUrl: face(a.name, (i * 47) % 360), idType: 'Aadhaar', idNumber: `1234 5678 ${String(1000 + i)}`, idVerified: true, validFrom: new Date(Date.now() - 864e5).toISOString().slice(0, 10) }, T, 'PATCH');
@@ -175,7 +238,6 @@ console.log('accreditation records:', (await req(`${P}/accreditation`, null, T))
 // ---- Finance: vendors, GST/TDS, approvals, receivables ----
 const fin = await req(`${P}/finance`, null, T);
 const vByName = (n) => fin.vendors.find((v) => v.companyName === n)?.id;
-const days = (n) => new Date(Date.now() + n * 864e5).toISOString();
 const exp = [
   ['Venue & Grounds', 'Wankhede Turf A — 14 match days', 840000, 151200, 16800, 'Wankhede Grounds Mgmt', 'PAID', 'WGM/26/118'],
   ['Broadcast & Production', 'Live production — league stage', 1650000, 297000, 33000, 'LiveCast Productions', 'PARTIAL', 'LCP-2231'],
@@ -197,7 +259,7 @@ const inc = [
 for (const [source, description, amount, gstAmount, status, party, due] of inc)
   await req(`${P}/finance/incomes`, { source, description, amount, gstAmount, status, party, invoiceNo: `CLT/${Math.floor(rnd() * 900 + 100)}`, dueDate: days(due) }, T);
 await req(`${P}/finance/settings`, { expenseApprovalLimit: 50000 }, T, 'PATCH');
-const OPS = await login('ops@demo.sportsiq.in');
+const OPS = OPS0();
 const pend = await req(`${P}/finance/expenses`, { category: 'Equipment', description: 'LED stumps hire — playoffs', amount: 185000, gstAmount: 33300, payee: 'StumpCam Rentals', status: 'PENDING' }, OPS);
 assert(pend.approval === 'PENDING_APPROVAL', 'staff expense above limit needs approval');
 await req(`${P}/finance/expenses`, { category: 'Food & Hospitality', description: 'Match-day water & snacks', amount: 18000, payee: 'Local caterer', status: 'PAID' }, OPS);
@@ -239,7 +301,7 @@ await req(`/vendor-portal/rfqs/${rfq2.id}/quote`, { amount: 36000, gstAmount: 0,
 console.log('procurement: RFQ awarded, work order completed, vendor rated', sw.rating);
 
 // ---- Jersey studio: team owner designs → league approves → printers quote → milestones ----
-const TO = await login('teamowner@demo.sportsiq.in');
+const TO = TO0;
 const js = await req(`${P}/jerseys`, null, TO);
 const myTeam = js.teams[0];
 const squadNames = (await req(`${P}/teams`, null, TO))[0].players.map((pl) => pl.player.user.name);

@@ -14,7 +14,7 @@ const SECRET = () => process.env.RAZORPAY_KEY_SECRET;
 export const provider = () => (KEY_ID() && SECRET() ? 'RAZORPAY' : 'TEST');
 export const testModeAllowed = () => provider() === 'TEST' && process.env.PAYMENTS_TEST_MODE !== 'false';
 
-export async function createPayment(opts: { purpose: 'SUBSCRIPTION' | 'TICKETS'; refId: string; amount: number; userId?: string; description: string }) {
+export async function createPayment(opts: { purpose: 'SUBSCRIPTION' | 'TICKETS' | 'REG_FEE'; refId: string; amount: number; userId?: string; description: string }) {
   if (opts.amount <= 0) throw new HttpError(400, 'Amount must be greater than zero');
   const p = await prisma.payment.create({ data: { purpose: opts.purpose, refId: opts.refId, amount: opts.amount, userId: opts.userId, provider: provider() } });
   if (provider() === 'RAZORPAY') {
@@ -60,6 +60,10 @@ async function fulfil(paymentId: string) {
     const taken = await prisma.$executeRaw`UPDATE "TicketCategory" SET "sold" = "sold" + ${order.qty} WHERE "id" = ${order.categoryId} AND "sold" + ${order.qty} <= "quantity"`;
     await prisma.ticketOrder.update({ where: { id: order.id }, data: taken ? { status: 'PAID', paymentId: p.id } : { status: 'CANCELLED', paymentId: p.id } });
     if (!taken) throw new HttpError(409, 'Sorry, these tickets sold out while you were paying. Your payment will be refunded.');
+  }
+  if (p.purpose === 'REG_FEE' && p.refId) {
+    const reg = await prisma.playerRegistration.update({ where: { id: p.refId }, data: { feeStatus: 'PAID', feePaid: p.amount }, include: { league: { select: { name: true } }, player: true } });
+    await notify(reg.player.userId, `Registration fee received for ${reg.league.name}`, { type: 'success', link: '/player' });
   }
   if (p.purpose === 'SUBSCRIPTION' && p.refId) {
     const validTill = new Date(); validTill.setFullYear(validTill.getFullYear() + 1);

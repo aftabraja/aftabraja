@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Shield, Trash2, UserPlus, Sparkles } from 'lucide-react';
+import { BookmarkCheck, ClipboardList, Pencil, Plus, Shield, Trash2, UserPlus, Sparkles } from 'lucide-react';
 import { del, get, patch, post } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
 import { fileToDataUrl, inrShort } from '../../lib/format';
-import { Avatar, Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Spinner } from '../../components/ui';
+import { Avatar, Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table } from '../../components/ui';
 import { CredentialsModal } from '../../components/Credentials';
 import { AiLogoStudio } from '../../components/AiLogoStudio';
 
@@ -15,6 +15,8 @@ export default function Teams() {
   const [edit, setEdit] = useState<any | null>(null);
   const [ownerFor, setOwnerFor] = useState<any | null>(null);
   const [creds, setCreds] = useState<any>(null);
+  const [staffFor, setStaffFor] = useState<any>(null);
+  const [retainFor, setRetainFor] = useState<any>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ['teams', leagueId] });
   const remove = useMutation({ mutationFn: (id: string) => del(`/leagues/${leagueId}/teams/${id}`), onSuccess: refresh });
   const removeOwner = useMutation({ mutationFn: ({ teamId, userId }: any) => del(`/leagues/${leagueId}/teams/${teamId}/owners/${userId}`), onSuccess: refresh });
@@ -62,6 +64,10 @@ export default function Teams() {
                     ))}
                   </ul>
                 </div>
+                <div className="flex gap-2 border-t border-ink-100 p-3">
+                  <Button size="sm" variant="ghost" className="flex-1" onClick={() => setStaffFor(t)}><ClipboardList className="h-3.5 w-3.5" />Staff{t._count?.staff ? ` (${t._count.staff})` : ''}</Button>
+                  <Button size="sm" variant="ghost" className="flex-1" onClick={() => setRetainFor(t)}><BookmarkCheck className="h-3.5 w-3.5" />Retentions</Button>
+                </div>
                 {isStaff && (
                   <div className="flex gap-2 border-t border-ink-100 p-3">
                     <Button size="sm" variant="secondary" className="flex-1" onClick={() => setOwnerFor(t)}><UserPlus className="h-3.5 w-3.5" />{t.owners.length ? 'Add co-owner' : 'Add owner'}</Button>
@@ -76,7 +82,68 @@ export default function Teams() {
       {edit && <TeamModal team={edit} leagueId={leagueId} onClose={() => { setEdit(null); refresh(); }} />}
       {ownerFor && <OwnerModal team={ownerFor} leagueId={leagueId} onClose={() => setOwnerFor(null)} onDone={(r) => { setOwnerFor(null); setCreds(r); refresh(); }} />}
       <CredentialsModal data={creds} onClose={() => setCreds(null)} />
+      {staffFor && <StaffModal team={staffFor} onClose={() => { setStaffFor(null); refresh(); }} />}
+      {retainFor && <RetentionModal team={retainFor} onClose={() => { setRetainFor(null); refresh(); }} />}
     </>
+  );
+}
+
+function StaffModal({ team, onClose }: { team: any; onClose: () => void }) {
+  const { leagueId } = useLeague();
+  const base = `/leagues/${leagueId}/squads/teams/${team.id}/staff`;
+  const list = useQuery({ queryKey: ['team-staff', team.id], queryFn: () => get<any[]>(base) });
+  const roles = useQuery({ queryKey: ['reg-settings', leagueId], queryFn: () => get(`/leagues/${leagueId}/squads/settings`) });
+  const [f, setF] = useState({ name: '', role: 'Head Coach', email: '', phone: '' });
+  const add = useMutation({ mutationFn: () => post(base, f), onSuccess: () => { setF({ name: '', role: f.role, email: '', phone: '' }); list.refetch(); } });
+  const remove = useMutation({ mutationFn: (id: string) => del(`${base}/${id}`), onSuccess: () => list.refetch() });
+  return (
+    <Modal open onClose={onClose} size="lg" title={`Support staff — ${team.name}`} footer={<Button variant="secondary" onClick={onClose}>Done</Button>}>
+      <ErrorText error={add.error} />
+      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+        <Input placeholder="Full name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+        <Select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })} options={roles.data?.staffRoles ?? ['Head Coach']} />
+        <Input placeholder="Email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+        <Input placeholder="Phone" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+        <Button disabled={f.name.length < 2} loading={add.isPending} onClick={() => add.mutate()}><Plus className="h-4 w-4" />Add</Button>
+      </div>
+      {list.isLoading ? <Spinner /> : (
+        <Table head={['Name', 'Role', 'Contact', '']} empty={!list.data?.length && <Empty icon={<ClipboardList className="h-5 w-5" />} title="No staff yet" text="Add coaches, manager, physio and analysts. They can be accredited from the Accreditation module." />}>
+          {list.data?.map((s) => <tr key={s.id}><td className="td font-medium text-ink-900">{s.name}</td><td className="td">{s.role}</td><td className="td text-xs">{[s.email, s.phone].filter(Boolean).join(' · ') || '—'}</td><td className="td text-right"><button onClick={() => remove.mutate(s.id)} className="p-1.5 text-ink-300 hover:text-red-600" aria-label="Remove"><Trash2 className="h-4 w-4" /></button></td></tr>)}
+        </Table>
+      )}
+    </Modal>
+  );
+}
+
+function RetentionModal({ team, onClose }: { team: any; onClose: () => void }) {
+  const { leagueId } = useLeague();
+  const base = `/leagues/${leagueId}/squads/teams/${team.id}`;
+  const q = useQuery({ queryKey: ['retention', team.id], queryFn: () => get(`${base}/retention`) });
+  const [price, setPrice] = useState<Record<string, string>>({});
+  const retain = useMutation({ mutationFn: (p: any) => post(`${base}/retain`, { regId: p.id, price: Number(price[p.id] ?? p.basePrice ?? 0) }), onSuccess: () => q.refetch() });
+  const release = useMutation({ mutationFn: (id: string) => del(`${base}/retain/${id}`), onSuccess: () => q.refetch() });
+  const d = q.data;
+  const used = d?.eligible.filter((p: any) => p.retained).length ?? 0;
+  return (
+    <Modal open onClose={onClose} size="lg" title={`Retentions — ${team.name}`} footer={<Button variant="secondary" onClick={onClose}>Done</Button>}>
+      {!d ? <Spinner /> : (
+        <>
+          <p className="mb-3 text-sm text-ink-500">{d.maxRetentions ? `Retain up to ${d.maxRetentions} players from last season before the auction (${used} used). The retention price comes out of the purse.` : 'This league does not allow retentions (set the limit in Auction rules).'}{!d.open && ' Retentions are closed — the auction has started.'}</p>
+          <ErrorText error={retain.error || release.error} />
+          <Table head={['Player', 'Role', 'Base', 'Retention price', '']} empty={!d.eligible.length && <Empty icon={<BookmarkCheck className="h-5 w-5" />} title="No eligible players" text="Mark a player's 'last season's team' on the Players page to make them eligible." />}>
+            {d.eligible.map((p: any) => (
+              <tr key={p.id}>
+                <td className="td font-medium text-ink-900">{p.name}{p.isOverseas && <Badge color="blue" className="ml-1">overseas</Badge>}</td>
+                <td className="td">{p.role ?? '—'}</td>
+                <td className="td">{inrShort(p.basePrice)}</td>
+                <td className="td">{p.retained ? inrShort(p.price) : <Input type="number" className="w-32" value={price[p.id] ?? p.basePrice ?? ''} onChange={(e) => setPrice({ ...price, [p.id]: e.target.value })} disabled={!d.open || !!p.teamId} />}</td>
+                <td className="td text-right">{p.retained ? (d.open && <Button size="sm" variant="ghost" onClick={() => release.mutate(p.id)}>Release</Button>) : p.teamId ? <span className="text-xs text-ink-500">in another squad</span> : <Button size="sm" disabled={!d.open || used >= d.maxRetentions} onClick={() => retain.mutate(p)}>Retain</Button>}</td>
+              </tr>
+            ))}
+          </Table>
+        </>
+      )}
+    </Modal>
   );
 }
 

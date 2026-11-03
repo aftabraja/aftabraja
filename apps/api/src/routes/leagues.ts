@@ -190,6 +190,7 @@ r.get('/:id/teams', ah(async (req, res) => {
     include: {
       owners: { include: { user: { select: { id: true, name: true, email: true, phone: true } } } },
       players: { include: { player: { include: { user: { select: { name: true } } } } } },
+      _count: { select: { staff: true } },
     },
   });
   res.json(teams);
@@ -283,7 +284,7 @@ r.get('/:id/registrations', ah(async (req, res) => {
   res.json(await prisma.playerRegistration.findMany({
     where: { leagueId: req.params.id },
     orderBy: { createdAt: 'desc' },
-    include: { team: { select: { id: true, name: true } }, player: { include: { user: { select: { id: true, name: true, email: true, phone: true } } } } },
+    include: { team: { select: { id: true, name: true } }, player: { include: { user: { select: { id: true, name: true, email: true, phone: true } } } }, _count: { select: { documents: true } } },
   }));
 }));
 
@@ -293,7 +294,14 @@ r.patch('/:id/registrations/:regId', ah(async (req, res) => {
     status: z.enum(['APPLIED', 'SHORTLISTED', 'REJECTED', 'SOLD', 'UNSOLD']).optional(),
     category: z.string().optional().nullable(), basePrice: z.coerce.number().int().optional().nullable(),
     soldPrice: z.coerce.number().int().optional().nullable(), teamId: z.string().optional().nullable(),
+    isOverseas: z.boolean().optional(), previousTeamId: z.string().optional().nullable(),
   }).parse(req.body);
+  if (d.status === 'SHORTLISTED') {
+    const cur = await prisma.playerRegistration.findFirst({ where: { id: req.params.regId, leagueId: req.params.id }, select: { feeStatus: true, kycStatus: true } });
+    if (cur?.feeStatus === 'PENDING') throw new HttpError(400, 'Registration fee is pending — mark it paid or waived first');
+    if (cur?.kycStatus === 'REJECTED') throw new HttpError(400, 'This player has rejected documents — ask them to re-upload');
+  }
+  if (d.previousTeamId && !(await prisma.team.findFirst({ where: { id: d.previousTeamId, leagueId: req.params.id } }))) throw new HttpError(400, 'Unknown team');
   const reg = await prisma.playerRegistration.update({ where: { id: req.params.regId, leagueId: req.params.id }, data: d, include: { player: true, league: true, team: true } });
   if (d.status) {
     const msg = d.status === 'SOLD' && reg.team ? `You have been picked by ${reg.team.name}!` : `Your ${reg.league.name} registration is now ${d.status.toLowerCase()}`;
