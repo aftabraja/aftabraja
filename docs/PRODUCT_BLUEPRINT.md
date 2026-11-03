@@ -10,7 +10,8 @@ Long-term goal: run leagues of every size, from corporate T10s to IPL-scale fran
 
 | Role | How they join | What they see |
 |---|---|---|
-| **Super Admin** (platform owner) | Seeded | Everything: every league, user, vendor, service, sponsor, opportunity, transaction and audit log. Can verify vendors, activate subscriptions and disable users. |
+| **Super Admin** (platform owner) | Seeded | Everything: every league, user, vendor, service, sponsor, opportunity, transaction, agency, talent and audit log. Can verify vendors and agencies, activate subscriptions, disable users and unpublish talent. |
+| **Agency / Manager** | Self-registers (₹2,500 per year) | Talent roster, availability and fees, enquiries from brands and leagues |
 | **League Owner** | Self-registers (₹5,000 per league season) | Their leagues: playbook, teams, players, management, sponsorships, finance and P&L, Deck Studio, contracts, documents, settings |
 | **League Management** (Ops, Finance, Marketing, Legal…) | Added by the owner (a login is created) | The same league workspace, without owner-only actions (deleting the league, removing people) |
 | **Team Owner / Co-owner** | Added by the league with a share % (a login is created) | Their team, squad, purse, league dashboard, playbook (read only), notifications |
@@ -54,19 +55,37 @@ Long-term goal: run leagues of every size, from corporate T10s to IPL-scale fran
 
 Every paid plan starts with a 14-day trial. Until online payments are integrated, the Super Admin activates plans.
 
-## 5. Roadmap
+## 5. Season operations (Phase 2, built)
 
-| Phase | Scope |
+| Module | What it does |
 |---|---|
-| **2 — Season operations** | Live auction engine (real time, purse and squad rules, RTM), trials with QR check-in and scout scoring, auto fixture scheduler, match-day checklists |
-| **3 — Match centre** | Ball-by-ball scoring app, live scorecards, points table and NRR, player stats, public match centre |
-| **4 — Logistics** | Hotels and rooming lists, flights and transport, itineraries, accreditation passes, ticketing with QR |
-| **5 — Commerce** | Online payments (Razorpay), GST invoices, vendor work orders with RFQ and quote comparison, vendor ratings, sponsor deliverables proof |
-| **6 — Scale** | Mobile apps, object storage for files, email/SMS/WhatsApp notifications, multi-sport (football, kabaddi…), multi-currency, analytics and AI assistant |
+| **Fixtures & auto-scheduler** | Single or double round-robin, minimum rest days, one match per team per day, venue rotation, IPL-style playoffs (Q1, Eliminator, Q2, Final) or semi-finals, seeded from the table, with winners and losers filled in automatically |
+| **Ball-by-ball scoring** | Scorer console (runs, wides, no-balls, byes, leg-byes, 7 dismissal types, strike rotation, undo), scorecards, fall of wickets, points table with NRR (Win 2, Tie/NR 1), result calculation |
+| **Live match centre** | Public league page (`/l/:slug`) with fixtures, live scores, points table and tickets. Live updates via Server-Sent Events. |
+| **Live auction** | Purse per team, bid increment, timer that resets on each bid, min/max squad, a purse guard that reserves money to complete the squad, team owners bid from their own login, auctioneer desk, sold/unsold, re-auction round |
+| **Trials** | Batches, open or invite-only registration, QR passes, gate check-in, scout scores (bat/bowl/field/fitness), auto-shortlist by score, role and age |
+| **Travel & hotels** | Hotels, rooming lists, flights/trains/buses with PNR and cost, per-team itinerary combining travel, check-ins and matches |
+| **Ticketing** | Categories (season or per match), online sales with QR e-tickets, box office and complimentary tickets, gate check-in with re-entry protection, atomic inventory |
+| **Payments** | Razorpay orders with signature verification. A clearly labelled TEST mode works until keys are added. Used for subscriptions and tickets. |
+| **Accreditation** | Zones, categories (letter and colour), applications with photo and government ID verification (only the last 4 digits are stored), approval rules, CR80 card design (front and back), A4 9-up or PVC card-printer printing with duplex alignment, issue, revoke, versioned reprint (old cards stop working), zone-gate QR verification, public application form for media, vendors and volunteers |
 
----
+## 6. Business layer (built)
 
-## 6. The League Execution Playbook
+- **Expense management**: 20 categories, vendor link, invoice number, GST, TDS, payment mode, receipt upload, paid/partial/pending, and an owner approval limit for staff expenses (pending items are excluded from actuals until approved). Budget overshoot alerts.
+- **P&L**: one finance engine powers the dashboard, the finance page and all reports. Ticket sales are included automatically. GST input/output and TDS are tracked.
+- **Reports centre**: 31 reports across Finance (P&L, budget vs actual, expense register, by category, by vendor, income register, receivables with ageing, payables, GST, TDS, monthly cash flow, pending approvals), Commercial (sponsorship, ticket sales, ticket orders), Cricket (fixtures and results, points table, batting and bowling stats, auction results, squads and purse, registrations, trial results) and Operations (playbook progress, teams and owners, management, accreditation register and gate scans, rooming list, travel manifest, vendors engaged). Each one downloads as **Excel (.xlsx)**, **PDF** or **CSV**, with an optional date range.
+- **Talent marketplace**: agencies and personal managers (`TALENT_AGENT` role) list the active cricketers and retired legends they represent, with availability for endorsements, league seasons and appearances, indicative fees and brand restrictions. Brands send endorsement enquiries and leagues sign legends. Each enquiry opens a chat with the agent. Publishing requires the agent to declare written authorisation, and the SuperAdmin verifies agencies and players and can unpublish profiles. Demo data uses fictional players only.
+
+## 7. Roadmap
+
+| Next | Scope |
+|---|---|
+| Notifications | Email, SMS and WhatsApp delivery for existing in-app alerts |
+| Storage | S3-compatible object storage for logos, receipts, photos and documents |
+| Integrations | E-sign providers, Tally/Zoho export, broadcast graphics feed |
+| Later | Mobile apps, multi-sport (deferred by product decision) |
+
+## 8. The League Execution Playbook
 
 Source of truth: `apps/api/src/data/playbook.ts`
 
@@ -214,7 +233,7 @@ _Finish strong and set up next season._
 | Final accounts & P&L | Finance | ✅ | Close books, P&L, audit, GST filing. |
 | Season review | League Owner |  | Fan NPS, team/sponsor feedback, lessons learned, plan for next season. |
 
-## 7. Vendor categories
+## 9. Vendor categories
 
 Source of truth: `apps/api/src/data/vendorCategories.ts`
 

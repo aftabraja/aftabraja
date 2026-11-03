@@ -14,7 +14,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   phone: z.string().optional(),
-  role: z.enum(['LEAGUE_OWNER', 'PLAYER', 'VENDOR', 'SPONSOR']),
+  role: z.enum(['LEAGUE_OWNER', 'PLAYER', 'VENDOR', 'SPONSOR', 'TALENT_AGENT']),
   companyName: z.string().optional(),
   city: z.string().optional(),
   industry: z.string().optional(),
@@ -28,6 +28,7 @@ export async function publicUser(id: string) {
       id: true, email: true, name: true, phone: true, role: true, avatarUrl: true, createdAt: true,
       vendorProfile: { select: { id: true, companyName: true } },
       sponsorProfile: { select: { id: true, companyName: true } },
+      agencyProfile: { select: { id: true, agencyName: true } },
       playerProfile: { select: { id: true } },
       subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 },
     },
@@ -38,7 +39,7 @@ r.post('/register', ah(async (req, res) => {
   const d = registerSchema.parse(req.body);
   const email = d.email.toLowerCase();
   if (await prisma.user.findUnique({ where: { email } })) throw new HttpError(409, 'An account with this email already exists');
-  if ((d.role === 'VENDOR' || d.role === 'SPONSOR') && !d.companyName) throw new HttpError(400, 'Company name is required');
+  if ((d.role === 'VENDOR' || d.role === 'SPONSOR' || d.role === 'TALENT_AGENT') && !d.companyName) throw new HttpError(400, 'Company name is required');
 
   const user = await prisma.user.create({
     data: {
@@ -49,6 +50,7 @@ r.post('/register', ah(async (req, res) => {
       },
       ...(d.role === 'VENDOR' && { vendorProfile: { create: { companyName: d.companyName!, city: d.city } } }),
       ...(d.role === 'SPONSOR' && { sponsorProfile: { create: { companyName: d.companyName!, city: d.city, industry: d.industry } } }),
+      ...(d.role === 'TALENT_AGENT' && { agencyProfile: { create: { agencyName: d.companyName!, city: d.city } } }),
       ...(d.role === 'PLAYER' && { playerProfile: { create: { city: d.city, playingRole: d.playingRole } } }),
     },
   });

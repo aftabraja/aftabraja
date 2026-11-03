@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Building2, Check, Megaphone, Trophy, User } from 'lucide-react';
+import { Building2, Check, Megaphone, Star, Trophy, User } from 'lucide-react';
 import { homeFor, useAuth } from '../lib/auth';
 import { Button, ErrorText, Field, Input, Select, cx } from '../components/ui';
 import { Logo } from '../components/Logo';
@@ -66,6 +66,7 @@ const ROLES = [
   { value: 'VENDOR', label: 'Vendor', desc: 'List your services for leagues', icon: Building2, price: '₹1,500 / year' },
   { value: 'SPONSOR', label: 'Sponsor', desc: 'Discover leagues to sponsor', icon: Megaphone, price: '₹2,500 / year' },
   { value: 'PLAYER', label: 'Player', desc: 'Build your profile & join leagues', icon: User, price: 'Free' },
+  { value: 'TALENT_AGENT', label: 'Agency / Manager', desc: 'Represent cricketers & legends', icon: Star, price: '₹2,500 / year' },
 ];
 
 export function Register() {
@@ -97,7 +98,7 @@ export function Register() {
       <form onSubmit={submit} className="space-y-4">
         <ErrorText error={error} />
         <Field label="Full name"><Input required value={f.name} onChange={set('name')} /></Field>
-        {(role === 'VENDOR' || role === 'SPONSOR') && <Field label="Company name"><Input required value={f.companyName} onChange={set('companyName')} /></Field>}
+        {(role === 'VENDOR' || role === 'SPONSOR' || role === 'TALENT_AGENT') && <Field label={role === 'TALENT_AGENT' ? 'Agency / manager name' : 'Company name'}><Input required value={f.companyName} onChange={set('companyName')} /></Field>}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Email"><Input type="email" required value={f.email} onChange={set('email')} /></Field>
           <Field label="Phone"><Input value={f.phone} onChange={set('phone')} /></Field>

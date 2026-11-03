@@ -28,7 +28,7 @@ export function Button({ variant = 'primary', size = 'md', loading, className, c
   );
 }
 
-export function Field({ label, hint, error, children, className }: { label?: string; hint?: string; error?: string; children: ReactNode; className?: string }) {
+export function Field({ label, hint, error, children, className }: { label?: string; hint?: ReactNode; error?: string; children: ReactNode; className?: string }) {
   return (
     <label className={cx('block', className)}>
       {label && <span className="label">{label}</span>}

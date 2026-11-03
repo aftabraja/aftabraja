@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { useQueryClient } from '@tanstack/react-query';
 import { get, post, tokenStore } from './api';
 
-export type Role = 'SUPER_ADMIN' | 'LEAGUE_OWNER' | 'LEAGUE_STAFF' | 'TEAM_OWNER' | 'PLAYER' | 'VENDOR' | 'SPONSOR';
+export type Role = 'SUPER_ADMIN' | 'LEAGUE_OWNER' | 'LEAGUE_STAFF' | 'TEAM_OWNER' | 'PLAYER' | 'VENDOR' | 'SPONSOR' | 'TALENT_AGENT';
 export interface User {
   id: string; email: string; name: string; phone?: string; role: Role; avatarUrl?: string;
   vendorProfile?: { id: string; companyName: string } | null;
@@ -48,4 +48,4 @@ export const useAuth = () => useContext(Ctx);
 
 /** Where each role lands after login */
 export const homeFor = (role: Role) =>
-  ({ SUPER_ADMIN: '/admin', LEAGUE_OWNER: '/leagues', LEAGUE_STAFF: '/leagues', TEAM_OWNER: '/leagues', PLAYER: '/player', VENDOR: '/vendor', SPONSOR: '/sponsor' })[role];
+  ({ SUPER_ADMIN: '/admin', LEAGUE_OWNER: '/leagues', LEAGUE_STAFF: '/leagues', TEAM_OWNER: '/leagues', PLAYER: '/player', VENDOR: '/vendor', SPONSOR: '/sponsor', TALENT_AGENT: '/agent' })[role];

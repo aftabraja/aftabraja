@@ -8,6 +8,7 @@ import { me, requireAuth, requireRole } from '../lib/auth.js';
 import { assertLeague, leagueAccess } from '../lib/access.js';
 import { audit, leagueManagers, notify } from '../lib/notify.js';
 import { slugify, tempPassword } from '../lib/util.js';
+import { financeSummary } from '../lib/finance.js';
 import { ALL_STEPS, PLAYBOOK, STEP_KEYS } from '../data/playbook.js';
 
 const r = Router();
@@ -112,13 +113,11 @@ r.delete('/:id', ah(async (req, res) => {
 r.get('/:id/dashboard', ah(async (req, res) => {
   const id = req.params.id;
   await assertLeague(me(req), id);
-  const [teams, registrations, opportunities, expenses, incomes, budget, members] = await Promise.all([
+  const [teams, registrations, opportunities, fin, members] = await Promise.all([
     prisma.team.count({ where: { leagueId: id } }),
     prisma.playerRegistration.groupBy({ by: ['status'], where: { leagueId: id }, _count: true }),
     prisma.sponsorshipOpportunity.findMany({ where: { leagueId: id }, select: { status: true, price: true } }),
-    prisma.expense.aggregate({ where: { leagueId: id }, _sum: { amount: true } }),
-    prisma.income.aggregate({ where: { leagueId: id }, _sum: { amount: true } }),
-    prisma.budgetLine.aggregate({ where: { leagueId: id }, _sum: { planned: true } }),
+    financeSummary(id),
     prisma.leagueMember.count({ where: { leagueId: id } }),
   ]);
   const teamsWithOwners = await prisma.team.count({ where: { leagueId: id, owners: { some: {} } } });
@@ -132,7 +131,7 @@ r.get('/:id/dashboard', ah(async (req, res) => {
       inventoryValue: opportunities.reduce((s, o) => s + o.price, 0),
       soldValue: opportunities.filter((o) => o.status === 'SOLD').reduce((s, o) => s + o.price, 0),
     },
-    finance: { expense: expenses._sum.amount ?? 0, income: incomes._sum.amount ?? 0, budget: budget._sum.planned ?? 0 },
+    finance: { expense: fin.pnl.expense, income: fin.pnl.income, budget: fin.pnl.plannedBudget, pendingApproval: fin.pnl.pendingApprovalCount },
   });
 }));
 

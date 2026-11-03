@@ -31,9 +31,12 @@ import { TrialDesk, TrialsList } from './pages/league/Trials';
 import Logistics from './pages/league/Logistics';
 import Ticketing from './pages/league/Ticketing';
 import Accreditation from './pages/league/Accreditation';
+import Reports from './pages/league/Reports';
+import TalentMarket from './pages/Talent';
+import AgentHome from './pages/Agent';
 import AccredApply from './pages/AccredApply';
 import { PublicLeague, PublicMatch, TicketView } from './pages/Public';
-import { AdminAudit, AdminLeagues, AdminOverview, AdminSponsors, AdminTransactions, AdminUsers, AdminVendors } from './pages/admin/Admin';
+import { AdminAudit, AdminLeagues, AdminOverview, AdminSponsors, AdminTalent, AdminTransactions, AdminUsers, AdminVendors } from './pages/admin/Admin';
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 
@@ -92,7 +95,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="/leagues/:leagueId/logistics" element={<Logistics />} />
                 <Route path="/leagues/:leagueId/tickets" element={<Ticketing />} />
                 <Route path="/leagues/:leagueId/accreditation" element={<Accreditation />} />
+                <Route path="/leagues/:leagueId/reports" element={<Reports />} />
                 <Route path="/marketplace" element={<Marketplace />} />
+                <Route path="/talent" element={<Protected roles={['LEAGUE_OWNER', 'LEAGUE_STAFF', 'SPONSOR']}><TalentMarket /></Protected>} />
+                <Route path="/agent" element={<Protected roles={['TALENT_AGENT']}><AgentHome /></Protected>} />
+                <Route path="/admin/talent" element={<Protected roles={[]}><AdminTalent /></Protected>} />
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/messages/:cid" element={<Messages />} />
                 <Route path="/notifications" element={<Notifications />} />

@@ -132,6 +132,26 @@ async function main() {
     await prisma.playerRegistration.create({ data: { leagueId: league.id, playerId: u.playerProfile!.id, status: i < 4 ? 'SHORTLISTED' : 'APPLIED', category: i < 2 ? 'Icon' : i < 6 ? 'A' : 'B', basePrice: i < 2 ? 500000 : i < 6 ? 200000 : 50000 } });
   }
 
+  // 7. Demo talent agencies with FICTIONAL players (never use real cricketers in demo data)
+  const face = (name: string, hue: number) => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 150"><rect width="120" height="150" fill="hsl(${hue},45%,88%)"/><circle cx="60" cy="58" r="28" fill="hsl(${hue},30%,55%)"/><path d="M14 150c4-34 24-50 46-50s42 16 46 50z" fill="hsl(${hue},30%,45%)"/><text x="60" y="64" font-family="Arial" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">${name.split(' ').map((w) => w[0]).join('').slice(0, 2)}</text></svg>`).toString('base64');
+  const agencies: Array<[string, string, string, Array<Record<string, unknown>>]> = [
+    ['Boundary Line Sports Management', 'Agency', 'Mumbai', [
+      { name: 'Vikrant Solanki', status: 'RETIRED', playingRole: 'Batter', state: 'Maharashtra', bornYear: 1982, matches: 212, runs: 7840, wickets: 4, followers: 1800000, levels: ['International', 'Franchise T20', 'Legends leagues'], teamsPlayed: ['West Zone', 'Mumbai'], highlights: ['Former national-team opener', 'Two first-class double hundreds', 'Legends league top scorer'], forEndorsement: true, forLeagues: true, forAppearances: true, endorseFeeMin: 1500000, endorseFeeMax: 4000000, leagueFeeMin: 800000, leagueFeeMax: 2000000, appearanceFeeMin: 300000, appearanceFeeMax: 700000, languages: ['Hindi', 'English', 'Marathi'], brandRestrictions: 'No alcohol, tobacco or betting brands', verified: true },
+      { name: 'Ishan Kothari', status: 'ACTIVE', playingRole: 'All-rounder', state: 'Gujarat', bornYear: 1998, matches: 64, runs: 1820, wickets: 71, followers: 950000, levels: ['Franchise T20', 'Domestic'], teamsPlayed: ['Gujarat'], highlights: ['Domestic T20 player of the tournament', 'Fastest domestic fifty of the season'], forEndorsement: true, forLeagues: false, forAppearances: true, endorseFeeMin: 600000, endorseFeeMax: 1500000, appearanceFeeMin: 150000, appearanceFeeMax: 300000, languages: ['Hindi', 'English', 'Gujarati'], verified: true },
+      { name: 'Rajat Bhonsle', status: 'RETIRED', playingRole: 'Bowler', state: 'Karnataka', bornYear: 1979, matches: 158, runs: 640, wickets: 402, followers: 620000, levels: ['International', 'Legends leagues'], teamsPlayed: ['South Zone', 'Karnataka'], highlights: ['400+ first-class wickets', 'Former national pace-bowling coach'], forEndorsement: true, forLeagues: true, forAppearances: true, endorseFeeMin: 500000, endorseFeeMax: 1200000, leagueFeeMin: 500000, leagueFeeMax: 1200000, appearanceFeeMin: 200000, appearanceFeeMax: 400000, languages: ['English', 'Kannada'], verified: false },
+    ]],
+    ['Arjun Rao — Player Manager', 'Personal manager', 'Bengaluru', [
+      { name: 'Sameer Qureshi', status: 'ACTIVE', playingRole: 'Wicket-keeper', state: 'Uttar Pradesh', bornYear: 2000, matches: 41, runs: 1210, wickets: 0, followers: 1200000, levels: ['Franchise T20', 'Domestic'], teamsPlayed: ['Uttar Pradesh'], highlights: ['Emerging player of the year (domestic)', 'Popular cricket content creator'], forEndorsement: true, forLeagues: false, forAppearances: true, endorseFeeMin: 400000, endorseFeeMax: 1000000, appearanceFeeMin: 100000, appearanceFeeMax: 250000, languages: ['Hindi', 'English', 'Urdu'], verified: true },
+      { name: 'Deepak Menon', status: 'RETIRED', playingRole: 'All-rounder', state: 'Kerala', bornYear: 1984, matches: 133, runs: 4210, wickets: 188, followers: 430000, levels: ['Franchise T20', 'Domestic', 'Legends leagues'], teamsPlayed: ['Kerala', 'South Zone'], highlights: ['Domestic captain for 6 seasons', 'Available as playing legend or mentor'], forEndorsement: false, forLeagues: true, forAppearances: true, leagueFeeMin: 300000, leagueFeeMax: 800000, appearanceFeeMin: 100000, appearanceFeeMax: 200000, languages: ['English', 'Malayalam', 'Hindi'], verified: true },
+    ]],
+  ];
+  for (const [ai, [agencyName, kind, city, talents]] of agencies.entries()) {
+    await prisma.user.create({ data: {
+      email: `agent${ai + 1}@demo.sportsiq.in`, name: agencyName, role: 'TALENT_AGENT', passwordHash: hash, subscriptions: trial('TALENT_AGENT', 2500),
+      agencyProfile: { create: { agencyName, kind, city, verified: ai === 0, description: kind === 'Agency' ? 'Full-service cricket talent management: endorsements, appearances and league signings.' : 'Personal manager for cricketers.', talents: { create: talents.map((t, i) => ({ ...t, photoUrl: face(t.name as string, (ai * 90 + i * 47) % 360), bio: `${t.name} — ${t.playingRole}. Available through ${agencyName}.`, isPublished: true, authorisedAt: new Date() })) as never } } },
+    } });
+  }
+
   await prisma.notification.create({ data: { userId: owner.id, title: 'Welcome to SportsIQ', body: 'Your league CLT10 is set up. Continue with the execution playbook.', link: `/leagues/${league.id}/playbook`, type: 'success' } });
   console.log(`Demo data created. Demo password for all demo users: ${DEMO_PASSWORD}`);
 }

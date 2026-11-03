@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, BookOpenCheck, Building2, ChevronDown, CircleDollarSign, FileText, Handshake, LayoutDashboard, LogOut, Menu,
-  MessageSquare, Search, Settings, Shield, ShieldCheck, Store, Trophy, User as UserIcon, Users, UsersRound, Wallet, X, ScrollText, Megaphone, Presentation, FileSignature, Gavel, CalendarDays, Plane, ClipboardCheck, Ticket, IdCard,
+  MessageSquare, Search, Settings, Shield, ShieldCheck, Store, Trophy, User as UserIcon, Users, UsersRound, Wallet, X, ScrollText, Megaphone, Presentation, FileSignature, Gavel, CalendarDays, Plane, ClipboardCheck, Ticket, IdCard, BarChart3, Star,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { get, post } from '../lib/api';
@@ -35,17 +35,24 @@ function useNav(): { title?: string; items: NavItem[] }[] {
           { to: '/admin/users', label: 'Users & Subscriptions', icon: i(Users) },
           { to: '/admin/vendors', label: 'Vendors', icon: i(Store) },
           { to: '/admin/sponsors', label: 'Sponsors & Inventory', icon: i(Handshake) },
+          { to: '/admin/talent', label: 'Agencies & Talent', icon: i(Star) },
           { to: '/admin/transactions', label: 'Transactions', icon: i(Wallet) },
           { to: '/admin/audit', label: 'Audit Log', icon: i(ScrollText) },
         ] },
-        ...(leagueId && league.data ? [leagueNav(leagueId, league.data, i)] : []),
+        ...(leagueId && league.data ? leagueNav(leagueId, league.data, i) : []),
         { title: 'Platform', items: common },
       ];
     case 'VENDOR':
       return [{ title: 'My Business', items: [{ to: '/vendor', label: 'Profile & Services', icon: i(Building2), end: true }, ...common] }];
+    case 'TALENT_AGENT':
+      return [{ title: 'Agency', items: [
+        { to: '/agent', label: 'Roster & Enquiries', icon: i(Star), end: true },
+        { to: '/messages', label: 'Messages', icon: i(MessageSquare) }, { to: '/notifications', label: 'Notifications', icon: i(Bell) },
+      ] }];
     case 'SPONSOR':
       return [{ title: 'Sponsor', items: [
         { to: '/sponsor', label: 'League Marketplace', icon: i(Trophy), end: true },
+        { to: '/talent', label: 'Cricketers for Endorsement', icon: i(Star) },
         { to: '/sponsor/profile', label: 'Company Profile', icon: i(Building2) },
         { to: '/messages', label: 'Messages', icon: i(MessageSquare) }, { to: '/notifications', label: 'Notifications', icon: i(Bell) },
       ] }];
@@ -57,38 +64,52 @@ function useNav(): { title?: string; items: NavItem[] }[] {
     default:
       return [
         { items: [{ to: '/leagues', label: 'My Leagues', icon: i(Trophy), end: true }] },
-        ...(leagueId && league.data ? [leagueNav(leagueId, league.data, i)] : []),
-        { title: 'Workspace', items: common },
+        ...(leagueId && league.data ? leagueNav(leagueId, league.data, i) : []),
+        { title: 'Workspace', items: [...common.slice(0, 1), ...(user.role === 'TEAM_OWNER' ? [] : [{ to: '/talent', label: 'Legends & Talent', icon: i(Star) }]), ...common.slice(1)] },
       ];
   }
 }
 
-function leagueNav(id: string, league: any, i: (C: any) => ReactNode) {
+function leagueNav(id: string, league: any, i: (C: any) => ReactNode): { title?: string; items: NavItem[] }[] {
   const base = `/leagues/${id}`;
   const team = league.access === 'team';
-  const items: NavItem[] = [
+  const head = { title: league.shortCode || league.name, items: [
     { to: base, label: 'Dashboard', icon: i(LayoutDashboard), end: true },
     { to: `${base}/playbook`, label: 'Execution Playbook', icon: i(BookOpenCheck) },
-    { to: `${base}/teams`, label: team ? 'My Team' : 'Teams & Owners', icon: i(Shield) },
+  ] };
+  if (team) return [head, { title: 'My team', items: [
+    { to: `${base}/teams`, label: 'My Team', icon: i(Shield) },
     { to: `${base}/players`, label: 'Players', icon: i(UsersRound) },
     { to: `${base}/auction`, label: 'Live Auction', icon: i(Gavel) },
-    { to: `${base}/fixtures`, label: 'Fixtures & Scoring', icon: i(CalendarDays) },
-    { to: `${base}/logistics`, label: team ? 'Team Itinerary' : 'Travel & Hotels', icon: i(Plane) },
+    { to: `${base}/fixtures`, label: 'Fixtures & Results', icon: i(CalendarDays) },
+    { to: `${base}/logistics`, label: 'Team Itinerary', icon: i(Plane) },
+  ] }];
+  return [
+    head,
+    { title: 'Season operations', items: [
+      { to: `${base}/teams`, label: 'Teams & Owners', icon: i(Shield) },
+      { to: `${base}/players`, label: 'Players', icon: i(UsersRound) },
+      { to: `${base}/trials`, label: 'Trials', icon: i(ClipboardCheck) },
+      { to: `${base}/auction`, label: 'Live Auction', icon: i(Gavel) },
+      { to: `${base}/fixtures`, label: 'Fixtures & Scoring', icon: i(CalendarDays) },
+      { to: `${base}/logistics`, label: 'Travel & Hotels', icon: i(Plane) },
+      { to: `${base}/accreditation`, label: 'Accreditation', icon: i(IdCard) },
+      { to: `${base}/tickets`, label: 'Ticketing', icon: i(Ticket) },
+    ] },
+    { title: 'Business', items: [
+      { to: `${base}/sponsorships`, label: 'Sponsorships', icon: i(Megaphone) },
+      { to: `${base}/sponsors`, label: 'Find Sponsors', icon: i(Handshake) },
+      { to: `${base}/finance`, label: 'Finance & P&L', icon: i(CircleDollarSign) },
+      { to: `${base}/reports`, label: 'Reports', icon: i(BarChart3) },
+      { to: `${base}/decks`, label: 'Deck Studio', icon: i(Presentation) },
+      { to: `${base}/contracts`, label: 'Legal Contracts', icon: i(FileSignature) },
+    ] },
+    { title: 'Admin', items: [
+      { to: `${base}/management`, label: 'Management Team', icon: i(Users) },
+      { to: `${base}/documents`, label: 'Documents', icon: i(FileText) },
+      { to: `${base}/settings`, label: 'League Settings', icon: i(Settings) },
+    ] },
   ];
-  if (!team) items.push(
-    { to: `${base}/trials`, label: 'Trials', icon: i(ClipboardCheck) },
-    { to: `${base}/tickets`, label: 'Ticketing', icon: i(Ticket) },
-    { to: `${base}/accreditation`, label: 'Accreditation', icon: i(IdCard) },
-    { to: `${base}/management`, label: 'Management Team', icon: i(Users) },
-    { to: `${base}/sponsorships`, label: 'Sponsorships', icon: i(Megaphone) },
-    { to: `${base}/sponsors`, label: 'Find Sponsors', icon: i(Handshake) },
-    { to: `${base}/finance`, label: 'Finance & P&L', icon: i(CircleDollarSign) },
-    { to: `${base}/decks`, label: 'Deck Studio', icon: i(Presentation) },
-    { to: `${base}/contracts`, label: 'Legal Contracts', icon: i(FileSignature) },
-    { to: `${base}/documents`, label: 'Documents', icon: i(FileText) },
-    { to: `${base}/settings`, label: 'League Settings', icon: i(Settings) },
-  );
-  return { title: league.shortCode || league.name, items };
 }
 
 function NotificationBell() {
@@ -171,7 +192,7 @@ export function AppShell() {
   const loc = useLocation();
   const leagueId = useMatch('/leagues/:leagueId/*')?.params.leagueId;
   const unread = useQuery({ queryKey: ['unread-messages'], queryFn: () => get<{ count: number }>('/messages/unread-count'), refetchInterval: 30_000 });
-  const canSearchVendors = user && !['VENDOR', 'PLAYER', 'SPONSOR'].includes(user.role);
+  const canSearchVendors = user && !['VENDOR', 'PLAYER', 'SPONSOR', 'TALENT_AGENT'].includes(user.role);
 
   const sidebar = (
     <nav className="flex h-full flex-col">

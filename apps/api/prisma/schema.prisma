@@ -18,6 +18,7 @@ enum Role {
   PLAYER
   VENDOR
   SPONSOR
+  TALENT_AGENT
 }
 
 enum LeagueStatus {
@@ -75,6 +76,8 @@ model User {
   playerProfile     PlayerProfile?
   vendorProfile     VendorProfile?
   sponsorProfile    SponsorProfile?
+  agencyProfile     AgencyProfile?
+  talentEnquiries   TalentEnquiry[]
   notifications     Notification[]
   participants      ConversationParticipant[]
   messages          Message[]
@@ -110,6 +113,7 @@ model League {
   endDate     DateTime?
   numTeams    Int          @default(0)
   teamPurse   Int? // INR
+  expenseApprovalLimit Int? // staff expenses above this need owner approval
   status      LeagueStatus @default(DRAFT)
   isPublic    Boolean      @default(true)
   ownerId     String
@@ -333,6 +337,16 @@ model Expense {
   vendorId    String?
   vendor      VendorProfile? @relation(fields: [vendorId], references: [id])
   payee       String?
+  invoiceNo   String?
+  gstAmount   Int           @default(0) // GST on top of amount (input tax)
+  tdsAmount   Int           @default(0) // TDS deducted at payment
+  paymentMode String? // Cash, UPI, Bank transfer, Card, Cheque
+  paidOn      DateTime?
+  receiptUrl  String?
+  notes       String?
+  approval    String        @default("APPROVED") // PENDING_APPROVAL, APPROVED, REJECTED
+  createdById String?
+  approvedById String?
   createdAt   DateTime      @default(now())
 }
 
@@ -345,6 +359,13 @@ model Income {
   amount      Int
   date        DateTime      @default(now())
   status      PaymentStatus @default(PENDING)
+  party       String? // who pays us
+  invoiceNo   String?
+  gstAmount   Int           @default(0) // output GST
+  paymentMode String?
+  receivedOn  DateTime?
+  dueDate     DateTime?
+  notes       String?
   createdAt   DateTime      @default(now())
 }
 
@@ -733,4 +754,78 @@ model AccredScan {
   reason          String?
   byUserId        String?
   createdAt       DateTime      @default(now())
+}
+
+// ======================= Talent marketplace (endorsements & legends) =======================
+
+model AgencyProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agencyName  String
+  kind        String   @default("Agency") // Agency, Personal manager
+  city        String?
+  website     String?
+  description String?
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  talents     Talent[]
+}
+
+model Talent {
+  id              String        @id @default(cuid())
+  agencyId        String
+  agency          AgencyProfile @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name            String
+  photoUrl        String?
+  status          String        @default("ACTIVE") // ACTIVE, RETIRED
+  playingRole     String?
+  battingStyle    String?
+  bowlingStyle    String?
+  country         String        @default("India")
+  state           String?
+  bornYear        Int?
+  bio             String?
+  highlights      String[]      @default([])
+  teamsPlayed     String[]      @default([])
+  levels          String[]      @default([]) // International, Franchise T20, Domestic, Legends leagues
+  matches         Int           @default(0)
+  runs            Int           @default(0)
+  wickets         Int           @default(0)
+  followers       Int? // combined social following
+  languages       String[]      @default([])
+  forEndorsement  Boolean       @default(true)
+  forLeagues      Boolean       @default(false)
+  forAppearances  Boolean       @default(true)
+  endorseFeeMin   Int?
+  endorseFeeMax   Int?
+  leagueFeeMin    Int?
+  leagueFeeMax    Int?
+  appearanceFeeMin Int?
+  appearanceFeeMax Int?
+  brandRestrictions String? // e.g. "No alcohol, tobacco, betting"
+  authorisedAt    DateTime? // agent confirmed written authorisation to represent this player
+  isPublished     Boolean       @default(false)
+  verified        Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  enquiries       TalentEnquiry[]
+}
+
+model TalentEnquiry {
+  id             String   @id @default(cuid())
+  talentId       String
+  talent         Talent   @relation(fields: [talentId], references: [id], onDelete: Cascade)
+  fromUserId     String
+  fromUser       User     @relation(fields: [fromUserId], references: [id], onDelete: Cascade)
+  purpose        String // ENDORSEMENT, LEAGUE, APPEARANCE
+  organisation   String?
+  leagueId       String?
+  budget         Int?
+  dates          String?
+  message        String
+  status         String   @default("NEW") // NEW, IN_DISCUSSION, CONFIRMED, DECLINED
+  conversationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }

@@ -106,6 +106,26 @@ r.get('/transactions', ah(async (_req, res) => {
   res.json({ expenses, incomes });
 }));
 
+r.get('/talent', ah(async (_req, res) => {
+  res.json(await prisma.agencyProfile.findMany({ orderBy: { createdAt: 'desc' }, include: { user: { select: { name: true, email: true, phone: true } }, talents: { orderBy: { name: 'asc' }, include: { _count: { select: { enquiries: true } } } } } }));
+}));
+
+r.patch('/agencies/:id', ah(async (req, res) => {
+  const d = z.object({ verified: z.boolean() }).parse(req.body);
+  const a = await prisma.agencyProfile.update({ where: { id: req.params.id }, data: d });
+  if (d.verified) await notify(a.userId, 'Your agency is verified on SportsIQ', { type: 'success', link: '/agent' });
+  res.json(a);
+}));
+
+r.patch('/talents/:id', ah(async (req, res) => {
+  const d = z.object({ verified: z.boolean().optional(), isPublished: z.boolean().optional() }).parse(req.body);
+  const t = await prisma.talent.update({ where: { id: req.params.id }, data: d, include: { agency: true } });
+  await audit(me(req).id, 'admin-update', 'Talent', t.id, d);
+  if (d.verified) await notify(t.agency.userId, `${t.name}'s profile is verified`, { type: 'success', link: '/agent' });
+  if (d.isPublished === false) await notify(t.agency.userId, `${t.name}'s profile was unpublished by SportsIQ`, { type: 'warning', link: '/agent' });
+  res.json(t);
+}));
+
 r.get('/audit', ah(async (_req, res) => {
   res.json(await prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 300, include: { user: { select: { name: true, email: true } } } }));
 }));

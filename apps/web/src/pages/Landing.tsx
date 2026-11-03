@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight, BadgeCheck, Bell, BookOpenCheck, Building2, Check, ChevronDown, CircleDollarSign, FileSignature, Handshake, LayoutDashboard,
+  ArrowRight, BadgeCheck, BarChart3, Bell, BookOpenCheck, Gavel, IdCard, Plane, Radio, Star, Ticket, Building2, Check, ChevronDown, CircleDollarSign, FileSignature, Handshake, LayoutDashboard,
   Megaphone, Menu, MessageSquare, Presentation, ShieldCheck, Sparkles, Store, Trophy, User, Users, X,
 } from 'lucide-react';
 import { Logo, Monogram } from '../components/Logo';
@@ -10,13 +10,24 @@ import { cx } from '../components/ui';
 const SHOTS = [
   { key: 'dashboard', label: 'League dashboard', img: '/screenshots/dashboard.jpg', text: 'League readiness, phase progress, teams, players, sponsorship and live P&L at a glance.' },
   { key: 'playbook', label: 'Execution playbook', img: '/screenshots/playbook.jpg', text: '13 phases and 66 steps — every step links to the right module, AI tool or vendor.' },
-  { key: 'vendors', label: 'Split-screen vendor search', img: '/screenshots/vendor-split.jpg', text: 'Click “Find vendors” on any step: menu, dashboard and vendor list side by side.' },
+  { key: 'vendors', label: 'Vendor search', img: '/screenshots/vendor-split.jpg', text: 'Click “Find vendors” on any step: menu, dashboard and vendor list side by side.' },
+  { key: 'auction', label: 'Live auction', img: '/screenshots/auction.jpg', text: 'Real-time player auction with purses, timers, squad rules and team-owner bidding.' },
+  { key: 'scoring', label: 'Ball-by-ball scoring', img: '/screenshots/scoring.jpg', text: 'Scorer console with undo, live scorecards, points table, NRR and a public match centre.' },
+  { key: 'accreditation', label: 'Accreditation', img: '/screenshots/accreditation.jpg', text: 'Zones, categories, photo & ID checks, CR80 card design, batch printing and gate verification.' },
+  { key: 'finance', label: 'Finance & P&L', img: '/screenshots/finance.jpg', text: 'Every expense and income with GST/TDS, approvals, budget vs actual and a live P&L.' },
+  { key: 'reports', label: 'Reports', img: '/screenshots/reports.jpg', text: '31 ready-made reports — download any of them as Excel, PDF or CSV.' },
+  { key: 'talent', label: 'Cricketers & legends', img: '/screenshots/talent-legends.jpg', text: 'Sign retired legends for your league or approach cricketers for brand endorsements through their agents.' },
   { key: 'sponsors', label: 'Sponsor marketplace', img: '/screenshots/sponsor-marketplace.jpg', text: 'Sponsors browse upcoming leagues, readiness and open packages — and contact owners directly.' },
-  { key: 'finance', label: 'Finance & P&L', img: '/screenshots/finance.jpg', text: 'Budget vs actual for every category, receivables, payables and a live profit & loss.' },
-  { key: 'deck', label: 'Deck Studio', img: '/screenshots/deck-studio.jpg', text: 'Sample sponsorship and team-sales decks auto-filled from your league — edit and export.' },
 ];
 
 const FEATURES = [
+  { icon: Gavel, title: 'Live Player Auction', text: 'Real-time bidding with purses, timers, squad limits and team-owner bidding from their own login.' },
+  { icon: Radio, title: 'Scoring & Match Centre', text: 'Ball-by-ball scoring, auto points table with NRR, auto fixture scheduler and a public live match centre.' },
+  { icon: IdCard, title: 'Accreditation', text: 'Zones, categories, photo & ID checks, CR80 card printing, revoke/reprint and QR gate verification.' },
+  { icon: Ticket, title: 'Ticketing & Payments', text: 'Sell QR e-tickets online with Razorpay, run the box office and scan entries at the gate.' },
+  { icon: Plane, title: 'Trials, Travel & Hotels', text: 'Trial batches with QR passes and scout scores, rooming lists, flights and team itineraries.' },
+  { icon: BarChart3, title: 'Reports in Every Format', text: '31 reports across finance, cricket, commercial and operations — Excel, PDF or CSV.' },
+  { icon: Star, title: 'Cricketers & Legends', text: 'Agencies list the players they represent. Brands sign endorsements; leagues sign legends.' },
   { icon: BookOpenCheck, title: 'Guided Execution Playbook', text: 'From league name and logo to closing ceremony — a proven step-by-step path with a live league progress bar.' },
   { icon: Store, title: 'Vendor Marketplace', text: '70+ categories: stadiums, umpires, scorers, anchors, production, jersey printers, trophy makers, lawyers, hotels and more.' },
   { icon: Megaphone, title: 'Sponsorship Marketplace', text: 'Create sponsorship inventory with pricing and deliverables. Sponsors discover your league and message you.' },
@@ -26,10 +37,10 @@ const FEATURES = [
   { icon: FileSignature, title: 'Contract Templates', text: 'Editable franchise, player, sponsor, vendor and venue templates — always to be verified by your lawyer.' },
   { icon: Sparkles, title: 'AI Logo Studio', text: 'No logo yet? Generate crest concepts instantly, then refine with a professional designer.' },
   { icon: MessageSquare, title: 'Messaging & Notifications', text: 'Talk to vendors, sponsors and owners in one inbox. Alerts for budgets, registrations and milestones.' },
-  { icon: ShieldCheck, title: 'Role-based Access', text: 'League owner, management, team owners, players, vendors and sponsors — each sees exactly what they should.' },
 ];
 
 const ROLES = [
+  { icon: Star, title: 'Agencies & Managers', text: 'List the cricketers and legends you represent.', role: 'TALENT_AGENT' },
   { icon: Trophy, title: 'League Owners', text: 'Run the whole league from one workspace.', role: 'LEAGUE_OWNER' },
   { icon: Users, title: 'Management Team', text: 'Ops, finance, marketing & legal — added by the owner.', role: null },
   { icon: ShieldCheck, title: 'Team Owners', text: 'Follow your team, squad, purse and updates.', role: null },
@@ -43,20 +54,22 @@ const PLANS = [
   { name: 'Team Owner', price: '₹2,000', period: 'per season', role: null, items: ['Team portal & squad view', 'Purse & auction tracking', 'Notifications & messaging', 'Added by your league'] },
   { name: 'Vendor', price: '₹1,500', period: 'per year', role: 'VENDOR', items: ['Business profile & unlimited services', 'Listed in 70+ categories', 'Direct enquiries from leagues', 'Verified badge'] },
   { name: 'Sponsor', price: '₹2,500', period: 'per year', role: 'SPONSOR', items: ['Browse every public league', 'See readiness & open packages', 'Message league owners', 'Company profile'] },
-  { name: 'Player', price: 'Free', period: 'forever', role: 'PLAYER', items: ['Player profile & stats', 'Register for open leagues', 'Selection notifications'] },
+  { name: 'Agency / Manager', price: '₹2,500', period: 'per year', role: 'TALENT_AGENT', items: ['List active players & legends', 'Endorsement & league enquiries', 'Verified agency badge'] },
+  { name: 'Player', price: 'Free', period: 'forever', role: 'PLAYER', items: ['Player profile & stats', 'Register for open leagues', 'Trial passes & selection alerts'] },
 ];
 
 const PHASES = ['Foundation & identity', 'Strategy & budget', 'Venue & infrastructure', 'Teams & franchises', 'Players, trials & auction', 'Officials & cricket ops', 'Fixtures', 'Sponsorship & broadcast', 'Jerseys, kits & branding', 'Travel & logistics', 'Marketing & ceremonies', 'Tournament execution', 'Closing & post-season'];
 
 const VENDOR_CLOUD = ['Stadiums & Grounds', 'Umpires', 'Match Referees', 'Scorers', 'Anchors & Hosts', 'Commentators', 'Broadcast Production', 'Live Streaming', 'Logo Designers', 'Jersey Printers', 'Trophy Makers', 'Sports Lawyers', 'Chartered Accountants', 'Hotels', 'Travel Agents', 'Team Buses', 'Caterers', 'Security', 'Ambulance & Medical', 'LED Screens', 'Fabrication', 'Event Management', 'Auctioneers', 'Photographers', 'Digital Agencies', 'PR Agencies', 'Ticketing', 'Insurance', 'Fireworks', 'Merchandise'];
 
-const ROADMAP = ['Live auction engine', 'Ball-by-ball scoring & match centre', 'Trials with QR check-in', 'Auto fixture scheduler', 'Hotels, rooming & flights', 'Ticketing & accreditation', 'Online payments', 'Mobile apps', 'Football, kabaddi & more sports'];
+const ROADMAP = ['Email, SMS & WhatsApp alerts', 'E-sign integrations', 'Broadcast graphics feed', 'Fan app & fantasy partners', 'Mobile apps', 'Football, kabaddi & more sports'];
 
 const FAQ = [
   ['Who is SportsIQ for?', 'Anyone running a league — corporate, community, state-level or professional — plus the team owners, players, vendors and sponsors around it.'],
   ['Do I need technical knowledge?', 'No. Create your league and SportsIQ guides you step by step, telling you what to do next and connecting you with the right vendors.'],
   ['Are the contract templates legal advice?', 'No. They are generic, editable starting points. Every agreement must be reviewed and verified by a qualified lawyer before use — you can find sports lawyers in the vendor marketplace.'],
-  ['Which sports are supported?', 'Cricket first, with the platform built to support football, kabaddi, badminton, volleyball and more.'],
+  ['Can brands sign cricketers for endorsements here?', 'Yes. Agencies and managers list the players they are authorised to represent. Brands and leagues send enquiries to the agent; agreements are made directly between them.'],
+  ['Which sports are supported?', 'Cricket today. More sports are on the roadmap.'],
   ['Is there a free trial?', 'Yes — every paid plan starts with a 14-day free trial, no card required.'],
 ];
 
@@ -119,7 +132,7 @@ export default function Landing() {
       {/* Numbers */}
       <section className="border-y border-ink-100 bg-ink-50/60">
         <div className="mx-auto grid max-w-7xl grid-cols-2 gap-6 px-4 py-10 text-center sm:px-6 md:grid-cols-4">
-          {[['13', 'execution phases'], ['66', 'guided steps'], ['70+', 'vendor categories'], ['7', 'role-based portals']].map(([n, l]) => (
+          {[['66', 'guided steps'], ['70+', 'vendor categories'], ['31', 'downloadable reports'], ['8', 'role-based portals']].map(([n, l]) => (
             <div key={l}><p className="text-4xl font-extrabold text-brand-700">{n}</p><p className="mt-1 text-sm font-medium text-ink-500">{l}</p></div>
           ))}
         </div>
@@ -131,7 +144,7 @@ export default function Landing() {
           <p className="text-sm font-bold uppercase tracking-wider text-brand-700">One platform, every stakeholder</p>
           <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">Everyone in your league, connected</h2>
         </div>
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {ROLES.map((r) => (
             <div key={r.title} className="card flex gap-4 p-6">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700"><r.icon className="h-5 w-5" /></div>
@@ -166,7 +179,7 @@ export default function Landing() {
           <p className="text-sm font-bold uppercase tracking-wider text-brand-700">Features</p>
           <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">Everything a league needs. Nothing it doesn’t.</h2>
         </div>
-        <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-ink-200 bg-ink-200 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-ink-200 bg-ink-200 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((f) => (
             <div key={f.title} className="bg-white p-6">
               <f.icon className="h-6 w-6 text-brand-700" />
@@ -222,7 +235,7 @@ export default function Landing() {
             <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">Simple pricing for every role</h2>
             <p className="mt-3 text-ink-500">Prices exclude GST. Every paid plan starts with a 14-day free trial.</p>
           </div>
-          <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="mx-auto mt-12 grid max-w-5xl gap-4 md:grid-cols-2 lg:grid-cols-3">
             {PLANS.map((p) => (
               <div key={p.name} className={cx('flex flex-col rounded-2xl border bg-white p-6', p.highlight ? 'border-brand-600 shadow-pop ring-4 ring-brand-100' : 'border-ink-200 shadow-card')}>
                 {p.highlight && <span className="mb-3 self-start rounded-full bg-brand-700 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">Most popular</span>}

@@ -204,3 +204,39 @@ export function AdminAudit() {
     </>
   );
 }
+
+export function AdminTalent() {
+  const qc = useQueryClient();
+  const a = useQuery({ queryKey: ['admin-talent'], queryFn: () => get<any[]>('/admin/talent') });
+  const verifyAgency = useMutation({ mutationFn: ({ id, verified }: any) => patch(`/admin/agencies/${id}`, { verified }), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-talent'] }) });
+  const updTalent = useMutation({ mutationFn: ({ id, ...b }: any) => patch(`/admin/talents/${id}`, b), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-talent'] }) });
+  return (
+    <>
+      <PageHeader title="Agencies & Talent" subtitle="Verify agencies and the players they represent. Unpublish any profile that is reported or cannot be verified." />
+      {a.isLoading ? <Spinner /> : (
+        <div className="space-y-6">
+          {a.data!.map((g) => (
+            <Card key={g.id} padded={false} title={<span>{g.agencyName} <span className="font-normal text-ink-500">· {g.kind} · {g.user.email}{g.user.phone ? ` · ${g.user.phone}` : ''}</span></span>}
+              action={<Button size="sm" variant={g.verified ? 'secondary' : 'primary'} onClick={() => verifyAgency.mutate({ id: g.id, verified: !g.verified })}>{g.verified ? 'Unverify agency' : 'Verify agency'}</Button>}>
+              <Table head={['Player', 'Status', 'Authorisation', 'Listing', 'Enquiries', '']}>
+                {g.talents.map((t: any) => (
+                  <tr key={t.id}>
+                    <td className="td"><div className="flex items-center gap-2"><Avatar name={t.name} src={t.photoUrl} size={30} /><span className="font-medium text-ink-900">{t.name}</span></div></td>
+                    <td className="td">{t.status.toLowerCase()}</td>
+                    <td className="td">{t.authorisedAt ? <span className="text-emerald-700">Confirmed {date(t.authorisedAt)}</span> : <span className="text-amber-700">Not confirmed</span>}</td>
+                    <td className="td">{t.isPublished ? <Badge color="green">Live</Badge> : <Badge>Draft</Badge>}{t.verified && <Badge color="blue" className="ml-1">Verified</Badge>}</td>
+                    <td className="td">{t._count.enquiries}</td>
+                    <td className="td text-right"><div className="flex justify-end gap-1">
+                      <Button size="sm" variant="secondary" onClick={() => updTalent.mutate({ id: t.id, verified: !t.verified })}>{t.verified ? 'Unverify' : 'Verify'}</Button>
+                      {t.isPublished && <Button size="sm" variant="ghost" onClick={() => updTalent.mutate({ id: t.id, isPublished: false })}>Unpublish</Button>}
+                    </div></td>
+                  </tr>
+                ))}
+              </Table>
+            </Card>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}

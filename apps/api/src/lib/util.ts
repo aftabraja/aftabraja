@@ -13,6 +13,7 @@ export const PLAN_PRICES: Record<string, number> = {
   TEAM_OWNER: 2000,
   VENDOR: 1500,
   SPONSOR: 2500,
+  TALENT_AGENT: 2500,
   PLAYER: 0,
   LEAGUE_STAFF: 0,
 };

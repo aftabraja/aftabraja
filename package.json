@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "description": "SportsIQ - the operating system for sports leagues",
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
     "dev:api": "npm run dev -w apps/api",
@@ -12,5 +14,8 @@
     "db:migrate": "npm run db:migrate -w apps/api",
     "db:seed": "npm run db:seed -w apps/api",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "overrides": {
+    "traverse": "0.3.9"
   }
 }

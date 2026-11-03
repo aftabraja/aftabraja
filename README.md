@@ -47,8 +47,18 @@ The web app runs at http://localhost:5173 and the API at http://localhost:4000. 
 | Vendor | vendor1@demo.sportsiq.in … vendor14 | Demo@1234 |
 | Sponsor | sponsor1@demo.sportsiq.in … sponsor4 | Demo@1234 |
 | Player | player1@demo.sportsiq.in … player12 | Demo@1234 |
+| Agency / Manager | agent1@demo.sportsiq.in, agent2@demo.sportsiq.in | Demo@1234 |
 
 Set `SEED_DEMO=false` to seed only the Super Admin and the vendor categories (for production).
+
+To fill the demo league with a full season (trials, auction, schedule, scored matches, hotels, travel, tickets, accreditation, finance, talent enquiries), start the API and then run:
+
+```bash
+node apps/api/scripts/demo-season.mjs
+```
+
+### Payments
+Set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `apps/api/.env` to take real payments. Without them, payments run in a clearly labelled **test mode** that charges nothing. Set `PAYMENTS_TEST_MODE=false` in production so test mode cannot be used.
 
 ## Repository layout
 ```
@@ -56,7 +66,10 @@ apps/
   api/
     prisma/            schema, migrations, seed
     src/data/          playbook, vendor categories, contract and deck templates
-    src/routes/        auth, leagues, vendors, sponsors, players, finance, messages, notifications, studio, admin
+    src/routes/        auth, leagues, fixtures (scoring), auction, trials, logistics, ticketing, payments, accreditation,
+                       finance, reports, talent, vendors, sponsors, players, messages, notifications, studio, public, admin
+    src/reports/       31 report definitions + Excel / PDF / CSV exporters
+    scripts/           demo-season.mjs (end-to-end demo + integration check)
     src/lib/           auth, access control, notifications, audit
   web/
     src/components/    AppShell, VendorPanel (3-pane search), AI Logo Studio, Slide, Logo, ui kit

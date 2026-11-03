@@ -171,4 +171,44 @@ assert(!g.allowed && /Old card version/.test(g.reason), 'old version rejected af
 const pubCats = await req(`/public/accreditation/${L.slug}`);
 await req(`/public/accreditation/${L.slug}`, { categoryId: pubCats.categories[0].id, name: 'Meera Kulkarni', organisation: 'Mumbai Sports Daily', designation: 'Sports Reporter', email: 'meera@example.com', phone: '9876543210', photoUrl: face('Meera Kulkarni', 200), idType: 'Press card', idNumber: 'MSD-2026-0042', consent: true });
 console.log('accreditation records:', (await req(`${P}/accreditation`, null, T)).summary);
+
+// ---- Finance: vendors, GST/TDS, approvals, receivables ----
+const fin = await req(`${P}/finance`, null, T);
+const vByName = (n) => fin.vendors.find((v) => v.companyName === n)?.id;
+const days = (n) => new Date(Date.now() + n * 864e5).toISOString();
+const exp = [
+  ['Venue & Grounds', 'Wankhede Turf A — 14 match days', 840000, 151200, 16800, 'Wankhede Grounds Mgmt', 'PAID', 'WGM/26/118'],
+  ['Broadcast & Production', 'Live production — league stage', 1650000, 297000, 33000, 'LiveCast Productions', 'PARTIAL', 'LCP-2231'],
+  ['Jerseys & Kits', 'Sublimated kits — 8 teams × 25 sets', 136000, 6800, 0, 'SportsWear Pro', 'PAID', 'SWP/INV/882'],
+  ['Match Officials', 'Umpires & scorers — first 10 matches', 160000, 0, 16000, 'Elite Umpires Panel', 'PENDING', 'EUP-41'],
+  ['Accommodation', 'Team hotel block — 120 room nights', 648000, 77760, 0, 'Grand Stay Hotels', 'PENDING', 'GSH/3381'],
+  ['Prize Money & Trophies', 'Championship & runner-up trophies', 145000, 26100, 0, 'Royal Trophies', 'PAID', 'RT-0921'],
+  ['Security & Medical', 'Ambulance standby — 16 matches', 128000, 0, 0, 'CareFirst Ambulance', 'PENDING', 'CF-771'],
+  ['Marketing & PR', 'Digital campaign — launch month', 380000, 68400, 7600, null, 'PAID', 'DG/2026/14'],
+];
+for (const [category, description, amount, gstAmount, tdsAmount, vendor, status, invoiceNo] of exp)
+  await req(`${P}/finance/expenses`, { category, description, amount, gstAmount, tdsAmount, vendorId: vendor ? vByName(vendor) : null, payee: vendor ? null : 'Pixel Growth Media', status, invoiceNo, paymentMode: status === 'PAID' ? 'Bank transfer' : null, date: days(-Math.floor(rnd() * 40)) }, T);
+const inc = [
+  ['Franchise Fee', 'Pune Panthers — instalment 1', 750000, 135000, 'PAID', 'Pune Panthers Sports LLP', -30],
+  ['Franchise Fee', 'Thane Titans — instalment 1', 750000, 135000, 'PENDING', 'Thane Titans Pvt Ltd', -5],
+  ['Sponsorship', 'Official Toss Partner — FreshBrew', 600000, 108000, 'PARTIAL', 'FreshBrew Beverages', 10],
+  ['Broadcast Rights', 'Streaming rights — league stage', 900000, 162000, 'PENDING', 'StreamPlay OTT', 20],
+];
+for (const [source, description, amount, gstAmount, status, party, due] of inc)
+  await req(`${P}/finance/incomes`, { source, description, amount, gstAmount, status, party, invoiceNo: `CLT/${Math.floor(rnd() * 900 + 100)}`, dueDate: days(due) }, T);
+await req(`${P}/finance/settings`, { expenseApprovalLimit: 50000 }, T, 'PATCH');
+const OPS = await login('ops@demo.sportsiq.in');
+const pend = await req(`${P}/finance/expenses`, { category: 'Equipment', description: 'LED stumps hire — playoffs', amount: 185000, gstAmount: 33300, payee: 'StumpCam Rentals', status: 'PENDING' }, OPS);
+assert(pend.approval === 'PENDING_APPROVAL', 'staff expense above limit needs approval');
+await req(`${P}/finance/expenses`, { category: 'Food & Hospitality', description: 'Match-day water & snacks', amount: 18000, payee: 'Local caterer', status: 'PAID' }, OPS);
+const f2 = await req(`${P}/finance`, null, T);
+console.log('P&L:', f2.pnl.income, f2.pnl.expense, f2.pnl.profit, 'pending approval', f2.pnl.pendingApprovalCount, 'GST net', f2.pnl.gst.net);
+
+// ---- Talent marketplace enquiries ----
+const SP = await login('sponsor1@demo.sportsiq.in');
+const talents = await req('/talent?purpose=ENDORSEMENT', null, SP);
+await req(`/talent/${talents[0].id}/enquiries`, { purpose: 'ENDORSEMENT', organisation: 'FreshBrew Beverages', budget: 2500000, dates: 'Feb–Mar 2027', message: 'TV + digital campaign for our new energy drink: 2 shoot days, 6 social posts, 12-month usage in India.' }, SP);
+const legends = await req('/talent?purpose=LEAGUE&status=RETIRED', null, T);
+assert(legends.length >= 2, 'legends available for leagues');
+await req(`/talent/${legends[0].id}/enquiries`, { purpose: 'LEAGUE', leagueId: L.id, budget: 1200000, dates: 'Jan 2027 season', message: 'We would like to sign you as the icon player and mentor for CLT10 Season 1.' }, T);
 console.log('DEMO SEASON OK');
