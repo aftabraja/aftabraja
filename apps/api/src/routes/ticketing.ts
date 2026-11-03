@@ -7,6 +7,7 @@ import { me, requireAuth } from '../lib/auth.js';
 import { assertLeague } from '../lib/access.js';
 import { createPayment } from '../lib/payments.js';
 import { teamSel } from '../lib/matchView.js';
+import { applyPromo, normaliseCode } from '../lib/promo.js';
 
 /** League-side ticketing: categories, orders, gate check-in. /api/leagues/:leagueId/tickets */
 const r = Router({ mergeParams: true });
@@ -44,6 +45,32 @@ r.delete('/categories/:cid', ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- Promo codes ----------
+const promoSchema = z.object({
+  code: z.string().min(3).max(20).transform(normaliseCode).refine((c) => /^[A-Z0-9_-]+$/.test(c), 'Use letters, numbers, - or _'),
+  kind: z.enum(['PERCENT', 'FLAT']), value: z.coerce.number().int().min(1),
+  maxUses: z.coerce.number().int().min(1).nullable().optional(), minQty: z.coerce.number().int().min(1).max(10).default(1),
+  categoryIds: z.array(z.string()).default([]), validFrom: z.coerce.date().nullable().optional(), validTo: z.coerce.date().nullable().optional(), active: z.boolean().optional(),
+}).refine((d) => d.kind !== 'PERCENT' || d.value <= 100, { message: 'Percent must be 100 or less', path: ['value'] });
+
+r.get('/promos', ah(async (req, res) => {
+  await assertLeague(me(req), req.params.leagueId, 'staff');
+  const promos = await prisma.promoCode.findMany({ where: { leagueId: req.params.leagueId }, orderBy: { createdAt: 'desc' } });
+  const stats = await prisma.ticketOrder.groupBy({ by: ['promoCodeId'], where: { status: 'PAID', promoCodeId: { in: promos.map((p) => p.id) } }, _sum: { amount: true, discount: true, qty: true } });
+  res.json(promos.map((p) => { const s = stats.find((x) => x.promoCodeId === p.id)?._sum; return { ...p, revenue: s?.amount ?? 0, discountGiven: s?.discount ?? 0, tickets: s?.qty ?? 0 }; }));
+}));
+r.post('/promos', ah(async (req, res) => {
+  await assertLeague(me(req), req.params.leagueId, 'staff');
+  const d = promoSchema.parse(req.body);
+  if (await prisma.promoCode.findUnique({ where: { leagueId_code: { leagueId: req.params.leagueId, code: d.code } } })) throw new HttpError(409, 'That code already exists');
+  res.status(201).json(await prisma.promoCode.create({ data: { ...d, leagueId: req.params.leagueId } }));
+}));
+r.patch('/promos/:id', ah(async (req, res) => {
+  await assertLeague(me(req), req.params.leagueId, 'staff');
+  const d = z.object({ active: z.boolean().optional(), maxUses: z.coerce.number().int().min(1).nullable().optional(), validTo: z.coerce.date().nullable().optional() }).parse(req.body);
+  res.json(await prisma.promoCode.update({ where: { id: req.params.id, leagueId: req.params.leagueId }, data: d }));
+}));
+
 // Box office: issue complimentary / cash tickets
 r.post('/box-office', ah(async (req, res) => {
   await assertLeague(me(req), req.params.leagueId, 'staff');
@@ -71,17 +98,34 @@ export const ticketCode = () => 'TK-' + crypto.randomBytes(5).toString('hex').to
 
 /** Public ticket purchase (no login) — mounted at /api/public/tickets */
 export const publicTickets = Router();
-publicTickets.post('/order', ah(async (req, res) => {
-  const d = z.object({ categoryId: z.string(), qty: z.coerce.number().int().min(1).max(10), buyerName: z.string().min(2), email: z.string().email(), phone: z.string().min(8).optional() }).parse(req.body);
-  const cat = await prisma.ticketCategory.findUnique({ where: { id: d.categoryId }, include: { league: true } });
+async function pricePromo(categoryId: string, qty: number, code?: string) {
+  const cat = await prisma.ticketCategory.findUnique({ where: { id: categoryId }, include: { league: true } });
   if (!cat || !cat.isActive || !cat.league.isPublic) throw new HttpError(404, 'Tickets not available');
+  const gross = cat.price * qty;
+  if (!code) return { cat, gross, discount: 0, promo: null };
+  const promo = await prisma.promoCode.findUnique({ where: { leagueId_code: { leagueId: cat.leagueId, code: normaliseCode(code) } } });
+  const r = applyPromo(promo, { categoryId, qty, unitPrice: cat.price });
+  if (r.error) throw new HttpError(400, r.error);
+  return { cat, gross, discount: r.discount, promo };
+}
+
+publicTickets.post('/promo', ah(async (req, res) => {
+  const d = z.object({ categoryId: z.string(), qty: z.coerce.number().int().min(1).max(10), code: z.string().min(1).max(30) }).parse(req.body);
+  const { gross, discount, promo } = await pricePromo(d.categoryId, d.qty, d.code);
+  res.json({ code: promo!.code, gross, discount, total: gross - discount });
+}));
+
+publicTickets.post('/order', ah(async (req, res) => {
+  const d = z.object({ categoryId: z.string(), qty: z.coerce.number().int().min(1).max(10), buyerName: z.string().min(2), email: z.string().email(), phone: z.string().min(8).optional(), promoCode: z.string().max(30).optional() }).parse(req.body);
+  const { cat, gross, discount, promo } = await pricePromo(d.categoryId, d.qty, d.promoCode || undefined);
   if (cat.sold + d.qty > cat.quantity) throw new HttpError(409, `Only ${cat.quantity - cat.sold} tickets left`);
-  const amount = cat.price * d.qty;
-  const order = await prisma.ticketOrder.create({ data: { categoryId: cat.id, code: ticketCode(), buyerName: d.buyerName, email: d.email, phone: d.phone, qty: d.qty, amount } });
+  const amount = gross - discount;
+  const order = await prisma.ticketOrder.create({ data: { categoryId: cat.id, code: ticketCode(), buyerName: d.buyerName, email: d.email, phone: d.phone, qty: d.qty, amount, discount, promoCodeId: promo?.id } });
   if (amount === 0) {
     const taken = await prisma.$executeRaw`UPDATE "TicketCategory" SET "sold" = "sold" + ${d.qty} WHERE "id" = ${cat.id} AND "sold" + ${d.qty} <= "quantity"`;
     if (!taken) throw new HttpError(409, 'Sold out');
     await prisma.ticketOrder.update({ where: { id: order.id }, data: { status: 'PAID' } });
+    if (promo) await prisma.promoCode.update({ where: { id: promo.id }, data: { used: { increment: 1 } } });
     return res.status(201).json({ free: true, ticketCode: order.code });
   }
   const pay = await createPayment({ purpose: 'TICKETS', refId: order.id, amount, description: `${d.qty} × ${cat.name} — ${cat.league.name}` });

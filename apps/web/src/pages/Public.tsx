@@ -93,10 +93,13 @@ export function PublicLeague() {
 function BuyModal({ cat, onClose }: { cat: any; onClose: () => void }) {
   const qc = useQueryClient();
   const [f, setF] = useState({ qty: 1, buyerName: '', email: '', phone: '' });
+  const [code, setCode] = useState('');
+  const [promo, setPromo] = useState<any>(null);
   const [done, setDone] = useState<string | null>(null);
+  const check = useMutation({ mutationFn: () => post('/public/tickets/promo', { categoryId: cat.id, qty: f.qty, code }), onSuccess: setPromo, onError: () => setPromo(null) });
   const order = useMutation({
     mutationFn: async () => {
-      const r = await post('/public/tickets/order', { categoryId: cat.id, ...f, phone: f.phone || undefined });
+      const r = await post('/public/tickets/order', { categoryId: cat.id, ...f, phone: f.phone || undefined, promoCode: promo?.code });
       if (r.free) return r.ticketCode;
       const v = await checkout(r);
       return v.ticketCode;
@@ -104,15 +107,20 @@ function BuyModal({ cat, onClose }: { cat: any; onClose: () => void }) {
     onSuccess: (code) => { setDone(code); qc.invalidateQueries({ queryKey: ['public'] }); },
   });
   return (
-    <Modal open onClose={onClose} title={`${cat.name} tickets`} footer={done ? <Button onClick={() => window.open(`/ticket/${done}`, '_blank')}>View my ticket</Button> : <><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={order.isPending} disabled={!f.buyerName || !f.email} onClick={() => order.mutate()}>{cat.price ? `Pay ${inr(cat.price * f.qty)}` : 'Get tickets'}</Button></>}>
+    <Modal open onClose={onClose} title={`${cat.name} tickets`} footer={done ? <Button onClick={() => window.open(`/ticket/${done}`, '_blank')}>View my ticket</Button> : <><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={order.isPending} disabled={!f.buyerName || !f.email} onClick={() => order.mutate()}>{cat.price && (promo ? promo.total : cat.price * f.qty) > 0 ? `Pay ${inr(promo ? promo.total : cat.price * f.qty)}` : 'Get tickets'}</Button></>}>
       {done ? <p className="rounded-lg bg-emerald-50 p-4 text-emerald-800">Your tickets are confirmed! Code <b>{done}</b>. Show the QR code at the gate.</p> : (
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2"><ErrorText error={order.error} /></div>
           <Field label="Full name" className="col-span-2"><Input value={f.buyerName} onChange={(e) => setF({ ...f, buyerName: e.target.value })} /></Field>
           <Field label="Email"><Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
           <Field label="Phone"><Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
-          <Field label="Quantity"><select className="input" value={f.qty} onChange={(e) => setF({ ...f, qty: Number(e.target.value) })}>{Array.from({ length: Math.min(10, cat.available) }, (_, i) => <option key={i + 1}>{i + 1}</option>)}</select></Field>
-          <div className="flex items-end justify-end"><p className="text-lg font-bold">{inr(cat.price * f.qty)}</p></div>
+          <Field label="Quantity"><select className="input" value={f.qty} onChange={(e) => { setF({ ...f, qty: Number(e.target.value) }); setPromo(null); }}>{Array.from({ length: Math.min(10, cat.available) }, (_, i) => <option key={i + 1}>{i + 1}</option>)}</select></Field>
+          <div className="flex items-end justify-end text-right">{promo ? <div><p className="text-xs text-ink-400 line-through">{inr(promo.gross)}</p><p className="text-lg font-bold text-emerald-700">{inr(promo.total)}</p></div> : <p className="text-lg font-bold">{inr(cat.price * f.qty)}</p>}</div>
+          <Field label="Promo code" className="col-span-2">
+            <div className="flex gap-2"><Input value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); setPromo(null); }} placeholder="Optional" /><Button variant="secondary" disabled={!code} loading={check.isPending} onClick={() => check.mutate()}>Apply</Button></div>
+          </Field>
+          {check.error && !promo && <p className="col-span-2 -mt-2 text-xs text-red-600">{(check.error as Error).message}</p>}
+          {promo && <p className="col-span-2 -mt-2 text-xs text-emerald-700">{promo.code} applied — you save {inr(promo.discount)}</p>}
         </div>
       )}
     </Modal>

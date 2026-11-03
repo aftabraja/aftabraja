@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Plus, ScanLine, Ticket, Trash2 } from 'lucide-react';
+import { BadgePercent, ExternalLink, Plus, ScanLine, Ticket, Trash2 } from 'lucide-react';
 import { del, get, patch, post } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
-import { ago, inr, inrShort } from '../../lib/format';
-import { Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Progress, Select, Spinner, Stat, StatusBadge, Table, Tabs } from '../../components/ui';
+import { ago, date, inr, inrShort } from '../../lib/format';
+import { Badge, Button, Card, Empty, ErrorText, Field, Input, Modal, PageHeader, Progress, Select, Spinner, Stat, StatusBadge, Table, Tabs } from '../../components/ui';
 
 export default function Ticketing() {
   const { leagueId, league } = useLeague();
@@ -12,7 +12,7 @@ export default function Ticketing() {
   const t = useQuery({ queryKey: ['tickets', leagueId], queryFn: () => get(`/leagues/${leagueId}/tickets`) });
   const matches = useQuery({ queryKey: ['matches', leagueId], queryFn: () => get<any[]>(`/leagues/${leagueId}/matches`) });
   const refresh = () => qc.invalidateQueries({ queryKey: ['tickets', leagueId] });
-  const [tab, setTab] = useState<'categories' | 'orders' | 'gate'>('categories');
+  const [tab, setTab] = useState<'categories' | 'orders' | 'gate' | 'promos'>('categories');
   const [cat, setCat] = useState<any>(null);
   const [box, setBox] = useState<any>(null);
   const [code, setCode] = useState('');
@@ -34,7 +34,8 @@ export default function Ticketing() {
         <Stat label="Occupancy" value={`${summary.capacity ? Math.round((summary.ticketsSold / summary.capacity) * 100) : 0}%`} />
         <Stat label="Entered at gate" value={summary.checkedIn.toLocaleString('en-IN')} />
       </div>
-      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'categories', label: 'Categories' }, { value: 'orders', label: `Orders (${orders.length})` }, { value: 'gate', label: 'Gate check-in' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'categories', label: 'Categories' }, { value: 'orders', label: `Orders (${orders.length})` }, { value: 'gate', label: 'Gate check-in' }, { value: 'promos', label: 'Promo codes' }]} />
+      {tab === 'promos' && <Promos categories={categories} />}
       {tab === 'categories' && (!categories.length ? <Card><Empty icon={<Ticket className="h-5 w-5" />} title="No ticket categories" text="Create categories like General, Pavilion and VIP — for the whole season or a specific match." /></Card> : (
         <Card padded={false}>
           <Table head={['Category', 'Valid for', 'Price', 'Sold', '', 'Status', '']}>
@@ -90,5 +91,46 @@ export default function Ticketing() {
         </div>}
       </Modal>
     </>
+  );
+}
+
+function Promos({ categories }: { categories: any[] }) {
+  const { leagueId } = useLeague();
+  const q = useQuery({ queryKey: ['promos', leagueId], queryFn: () => get<any[]>(`/leagues/${leagueId}/tickets/promos`) });
+  const [f, setF] = useState<any>(null);
+  const create = useMutation({ mutationFn: () => post(`/leagues/${leagueId}/tickets/promos`, { ...f, value: Number(f.value), maxUses: f.maxUses ? Number(f.maxUses) : null, minQty: Number(f.minQty) || 1, validFrom: f.validFrom || null, validTo: f.validTo || null }), onSuccess: () => { setF(null); q.refetch(); } });
+  const toggle = useMutation({ mutationFn: (p: any) => patch(`/leagues/${leagueId}/tickets/promos/${p.id}`, { active: !p.active }), onSuccess: () => q.refetch() });
+  return (
+    <Card padded={false} title={<span className="flex items-center gap-2"><BadgePercent className="h-4 w-4" />Promo codes</span>} action={<Button size="sm" onClick={() => setF({ code: '', kind: 'PERCENT', value: 10, maxUses: '', minQty: 1, categoryIds: [], validFrom: '', validTo: '' })}><Plus className="h-3.5 w-3.5" />New code</Button>}>
+      {q.isLoading ? <Spinner /> : (
+        <Table head={['Code', 'Offer', 'Applies to', 'Uses', 'Tickets', 'Discount given', 'Net revenue', 'Valid till', '']} empty={!q.data?.length && <Empty icon={<BadgePercent className="h-5 w-5" />} title="No promo codes" text="Create codes for students, early birds, corporate groups or sponsor giveaways. Fans enter them at checkout." />}>
+          {q.data?.map((p) => (
+            <tr key={p.id}>
+              <td className="td font-mono font-semibold text-ink-900">{p.code}</td>
+              <td className="td">{p.kind === 'PERCENT' ? `${p.value}% off` : `${inr(p.value)} off`}{p.minQty > 1 && <span className="block text-xs text-ink-500">min {p.minQty} tickets</span>}</td>
+              <td className="td text-xs">{p.categoryIds.length ? categories.filter((c) => p.categoryIds.includes(c.id)).map((c) => c.name).join(', ') : 'All tickets'}</td>
+              <td className="td">{p.used}{p.maxUses ? ` / ${p.maxUses}` : ''}</td>
+              <td className="td">{p.tickets}</td>
+              <td className="td">{inr(p.discountGiven)}</td>
+              <td className="td">{inr(p.revenue)}</td>
+              <td className="td">{p.validTo ? date(p.validTo) : '—'}</td>
+              <td className="td text-right"><button onClick={() => toggle.mutate(p)}><Badge color={p.active ? 'green' : 'gray'}>{p.active ? 'active' : 'paused'}</Badge></button></td>
+            </tr>
+          ))}
+        </Table>
+      )}
+      <Modal open={!!f} onClose={() => setF(null)} title="New promo code" footer={<><Button variant="secondary" onClick={() => setF(null)}>Cancel</Button><Button disabled={!f?.code || f.code.length < 3} loading={create.isPending} onClick={() => create.mutate()}>Create</Button></>}>
+        {f && <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2"><ErrorText error={create.error} /></div>
+          <Field label="Code"><Input className="font-mono uppercase" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase().replace(/\s/g, '') })} placeholder="STUDENT20" /></Field>
+          <Field label="Discount"><div className="flex gap-2"><select className="input w-28" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}><option value="PERCENT">% off</option><option value="FLAT">₹ off</option></select><Input type="number" min={1} value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} /></div></Field>
+          <Field label="Maximum uses" hint="Blank = unlimited"><Input type="number" min={1} value={f.maxUses} onChange={(e) => setF({ ...f, maxUses: e.target.value })} /></Field>
+          <Field label="Minimum tickets per order"><Input type="number" min={1} max={10} value={f.minQty} onChange={(e) => setF({ ...f, minQty: e.target.value })} /></Field>
+          <Field label="Valid from"><Input type="date" value={f.validFrom} onChange={(e) => setF({ ...f, validFrom: e.target.value })} /></Field>
+          <Field label="Valid till"><Input type="date" value={f.validTo} onChange={(e) => setF({ ...f, validTo: e.target.value })} /></Field>
+          <div className="sm:col-span-2"><p className="label">Applies to</p><div className="flex flex-wrap gap-3">{categories.map((c) => <label key={c.id} className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={f.categoryIds.includes(c.id)} onChange={(e) => setF({ ...f, categoryIds: e.target.checked ? [...f.categoryIds, c.id] : f.categoryIds.filter((x: string) => x !== c.id) })} />{c.name}</label>)}</div><p className="mt-1 text-xs text-ink-500">Leave all unticked to apply to every ticket type.</p></div>
+        </div>}
+      </Modal>
+    </Card>
   );
 }

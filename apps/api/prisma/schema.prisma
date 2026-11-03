@@ -464,6 +464,23 @@ model Deck {
   slides    Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  shares    DeckShare[]
+}
+
+model DeckShare {
+  id            String    @id @default(cuid())
+  deckId        String
+  deck          Deck      @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  token         String    @unique
+  label         String // who it was shared with
+  watermark     String? // shown across every slide
+  allowDownload Boolean   @default(false)
+  expiresAt     DateTime?
+  revokedAt     DateTime?
+  views         Int       @default(0)
+  lastViewedAt  DateTime?
+  createdBy     String
+  createdAt     DateTime  @default(now())
 }
 
 model Contract {
@@ -698,6 +715,8 @@ model TicketOrder {
   qty         Int
   amount      Int
   status      String         @default("PENDING") // PENDING, PAID, CANCELLED
+  promoCodeId String?
+  discount    Int            @default(0)
   paymentId   String?
   checkedIn   Int            @default(0)
   createdAt   DateTime       @default(now())
@@ -1300,4 +1319,48 @@ model MatchChecklistItem {
   note       String?
   sort       Int       @default(0)
   alerted    Boolean   @default(false)
+}
+
+model PromoCode {
+  id          String    @id @default(cuid())
+  leagueId    String
+  code        String
+  kind        String // PERCENT or FLAT
+  value       Int // percent (1-100) or rupees off per order
+  maxUses     Int?
+  used        Int       @default(0)
+  minQty      Int       @default(1)
+  categoryIds String[]  @default([]) // empty = all ticket categories
+  validFrom   DateTime?
+  validTo     DateTime?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@unique([leagueId, code])
+}
+
+model Survey {
+  id        String   @id @default(cuid())
+  leagueId  String
+  title     String
+  audience  String // FANS, PLAYERS, TEAMS, SPONSORS, VENDORS, STAFF
+  matchId   String?
+  question  String
+  followUp  String   @default("What is the main reason for your score?")
+  token     String   @unique
+  active    Boolean  @default(true)
+  closesAt  DateTime?
+  createdAt DateTime @default(now())
+  responses SurveyResponse[]
+}
+
+model SurveyResponse {
+  id        String   @id @default(cuid())
+  surveyId  String
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  score     Int
+  comment   String?
+  name      String?
+  email     String?
+  createdAt DateTime @default(now())
 }

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { cx } from './ui';
 
-export interface SlideData { layout: 'cover' | 'bullets' | 'stats' | 'table' | 'closing'; title: string; subtitle?: string; bullets?: string[]; stats?: { label: string; value: string }[]; rows?: string[][] }
+export interface SlideData { layout: 'cover' | 'bullets' | 'stats' | 'table' | 'closing' | 'image'; imageUrl?: string; caption?: string; notes?: string; title: string; subtitle?: string; bullets?: string[]; stats?: { label: string; value: string }[]; rows?: string[][] }
 interface Brand { name: string; logoUrl?: string | null; color?: string | null }
 
 /** A slide rendered at a fixed 960×540 canvas (scaled by the caller). */
-export function SlideCanvas({ s, brand, index, total }: { s: SlideData; brand: Brand; index: number; total: number }) {
+export function SlideCanvas({ s, brand, index, total, watermark }: { s: SlideData; brand: Brand; index: number; total: number; watermark?: string | null }) {
   const c = brand.color || '#1d4ed8';
   const dark = s.layout === 'cover' || s.layout === 'closing';
   return (
@@ -36,6 +36,11 @@ export function SlideCanvas({ s, brand, index, total }: { s: SlideData; brand: B
                 {s.stats?.map((x, i) => <div key={i} className="rounded-2xl border-2 border-ink-100 p-6"><p className="text-5xl font-extrabold" style={{ color: c }}>{x.value}</p><p className="mt-2 text-xl text-ink-500">{x.label}</p></div>)}
               </div>
             )}
+            {s.layout === 'image' && (
+              s.imageUrl
+                ? <figure className="flex h-[330px] flex-col"><img src={s.imageUrl} alt={s.caption ?? s.title} className="min-h-0 flex-1 rounded-xl object-contain" />{s.caption && <figcaption className="mt-2 text-center text-base text-ink-500">{s.caption}</figcaption>}</figure>
+                : <div className="flex h-[330px] items-center justify-center rounded-xl border-2 border-dashed border-ink-200 text-xl text-ink-400">Upload an image for this slide</div>
+            )}
             {s.layout === 'table' && s.rows && (
               <table className="w-full text-xl">
                 <thead><tr>{s.rows[0]?.map((h, i) => <th key={i} style={{ background: c }} className="px-4 py-3 text-left font-bold text-white first:rounded-l-lg last:rounded-r-lg">{h}</th>)}</tr></thead>
@@ -48,6 +53,13 @@ export function SlideCanvas({ s, brand, index, total }: { s: SlideData; brand: B
       <div className={cx('absolute bottom-5 left-16 right-10 flex justify-between text-sm', dark ? 'text-white/60' : 'text-ink-400')}>
         <span className="font-semibold">{brand.name}</span><span>{index + 1} / {total}</span>
       </div>
+      {watermark && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 select-none overflow-hidden">
+          <div className="absolute -left-40 -top-20 flex w-[1400px] rotate-[-24deg] flex-col gap-24">
+            {Array.from({ length: 6 }, (_, i) => <p key={i} className={cx('whitespace-nowrap text-3xl font-bold', dark ? 'text-white/15' : 'text-ink-900/[0.07]')} style={{ marginLeft: (i % 2) * 180 }}>{`${watermark}   ·   ${watermark}`}</p>)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

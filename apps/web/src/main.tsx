@@ -28,6 +28,8 @@ import { Account, Marketplace, Messages, Notifications } from './pages/Common';
 import { PlayerHome, SponsorHome, SponsorProfile, VendorHome } from './pages/Portals';
 import Fixtures from './pages/league/Fixtures';
 import MatchDay from './pages/league/MatchDay';
+import { PublicSurvey, SharedDeck } from './pages/Shared';
+import Surveys from './pages/league/Surveys';
 import MatchCenter from './pages/league/MatchCenter';
 import AuctionRoom from './pages/league/Auction';
 import { TrialDesk, TrialsList } from './pages/league/Trials';
@@ -81,6 +83,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/l/:slug" element={<PublicLeague />} />
               <Route path="/l/:slug/match/:mid" element={<PublicMatch />} />
               <Route path="/ticket/:code" element={<TicketView />} />
+              <Route path="/d/:token" element={<SharedDeck />} />
+              <Route path="/s/:token" element={<PublicSurvey />} />
               <Route path="/accreditation/apply/:slug" element={<AccredApply />} />
               <Route element={<Protected><AppShell /></Protected>}>
                 <Route path="/leagues" element={<Protected roles={LEAGUE_ROLES}><LeaguesPage /></Protected>} />
@@ -101,6 +105,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="/leagues/:leagueId/contracts/:contractId" element={<ContractEditor />} />
                 <Route path="/leagues/:leagueId/fixtures" element={<Fixtures />} />
                 <Route path="/leagues/:leagueId/matchday" element={<MatchDay />} />
+                <Route path="/leagues/:leagueId/surveys" element={<Surveys />} />
                 <Route path="/leagues/:leagueId/matches/:mid" element={<MatchCenter />} />
                 <Route path="/leagues/:leagueId/auction" element={<AuctionRoom />} />
                 <Route path="/leagues/:leagueId/trials" element={<TrialsList />} />

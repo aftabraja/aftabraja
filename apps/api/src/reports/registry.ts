@@ -1,3 +1,4 @@
+import { nps } from '../lib/promo.js';
 import { prisma } from '../lib/prisma.js';
 import { financeSummary, type Period } from '../lib/finance.js';
 import { standings } from '../lib/standings.js';
@@ -399,6 +400,26 @@ export const REPORTS: ReportDef[] = [
       return { columns: [{ key: 'number', label: '#', type: 'number' }, { key: 'fixture', label: 'Fixture', width: 34 }, { key: 'startsAt', label: 'Starts', type: 'datetime' }, { key: 'status', label: 'Status' }, { key: 'done', label: 'Done', type: 'number' }, { key: 'total', label: 'Checks', type: 'number' }, { key: 'criticalOpen', label: 'Critical open', type: 'number', total: true }, { key: 'overdue', label: 'Overdue', type: 'number', total: true }],
         rows: ms.map((m) => ({ number: m.number, startsAt: m.startsAt, status: m.status, fixture: `${m.homeTeam?.name ?? m.homeLabel ?? 'TBD'} vs ${m.awayTeam?.name ?? m.awayLabel ?? 'TBD'}`, total: m.checklist.length, done: m.checklist.filter((c) => c.done).length, criticalOpen: m.checklist.filter((c) => c.critical && !c.done).length, overdue: m.checklist.filter((c) => !c.done && c.dueAt && c.dueAt < now).length })),
         notes: ['Checklists are created when a match is first opened in Match-day Ops.'] };
+    },
+  },
+  {
+    key: 'nps-results', title: 'NPS Survey Results', group: 'Commercial',
+    description: 'Net Promoter Score per survey with promoters, passives, detractors and response count.',
+    run: async (id) => {
+      const ss = await prisma.survey.findMany({ where: { leagueId: id }, orderBy: { createdAt: 'desc' }, include: { responses: { select: { score: true } } } });
+      return { columns: [{ key: 'title', label: 'Survey', width: 32 }, { key: 'audience', label: 'Audience' }, { key: 'createdAt', label: 'Created', type: 'date' }, { key: 'responses', label: 'Responses', type: 'number', total: true }, { key: 'score', label: 'NPS', type: 'number' }, { key: 'promoters', label: 'Promoters', type: 'percent' }, { key: 'passives', label: 'Passives', type: 'percent' }, { key: 'detractors', label: 'Detractors', type: 'percent' }],
+        rows: ss.map((s) => { const n = nps(s.responses.map((r) => r.score)); return { title: s.title, audience: s.audience, createdAt: s.createdAt, ...n, score: n.score ?? '' }; }),
+        notes: ['NPS = % promoters (9–10) minus % detractors (0–6). Ranges from −100 to +100.'] };
+    },
+  },
+  {
+    key: 'promo-codes', title: 'Ticket Promo Codes', group: 'Commercial',
+    description: 'Every promo code with uses, tickets sold, discount given and net revenue.',
+    run: async (id) => {
+      const ps = await prisma.promoCode.findMany({ where: { leagueId: id }, orderBy: { createdAt: 'desc' } });
+      const stats = await prisma.ticketOrder.groupBy({ by: ['promoCodeId'], where: { status: 'PAID', promoCodeId: { in: ps.map((p) => p.id) } }, _sum: { amount: true, discount: true, qty: true } });
+      return { columns: [{ key: 'code', label: 'Code' }, { key: 'offer', label: 'Offer' }, { key: 'used', label: 'Uses', type: 'number', total: true }, { key: 'maxUses', label: 'Limit' }, { key: 'tickets', label: 'Tickets', type: 'number', total: true }, { key: 'discount', label: 'Discount given', type: 'money', total: true }, { key: 'revenue', label: 'Net revenue', type: 'money', total: true }, { key: 'validTo', label: 'Valid till', type: 'date' }, { key: 'status', label: 'Status' }],
+        rows: ps.map((p) => { const x = stats.find((s) => s.promoCodeId === p.id)?._sum; return { code: p.code, offer: p.kind === 'PERCENT' ? `${p.value}% off` : `Rs.${p.value} off`, used: p.used, maxUses: p.maxUses ?? 'No limit', tickets: x?.qty ?? 0, discount: x?.discount ?? 0, revenue: x?.amount ?? 0, validTo: p.validTo, status: p.active ? 'Active' : 'Paused' }; }) };
     },
   },
   {

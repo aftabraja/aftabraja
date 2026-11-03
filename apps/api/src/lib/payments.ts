@@ -59,6 +59,7 @@ async function fulfil(paymentId: string) {
     // Atomically take inventory; refuse if the category sold out meanwhile
     const taken = await prisma.$executeRaw`UPDATE "TicketCategory" SET "sold" = "sold" + ${order.qty} WHERE "id" = ${order.categoryId} AND "sold" + ${order.qty} <= "quantity"`;
     await prisma.ticketOrder.update({ where: { id: order.id }, data: taken ? { status: 'PAID', paymentId: p.id } : { status: 'CANCELLED', paymentId: p.id } });
+    if (taken && order.promoCodeId) await prisma.promoCode.update({ where: { id: order.promoCodeId }, data: { used: { increment: 1 } } });
     if (!taken) throw new HttpError(409, 'Sorry, these tickets sold out while you were paying. Your payment will be refunded.');
   }
   if (p.purpose === 'REG_FEE' && p.refId) {

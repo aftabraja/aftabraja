@@ -226,6 +226,45 @@ for (let k = 0; k < 12; k++) {
   const v = await req('/payments/verify', { paymentId: pay.paymentId });
   if (k < 5) await req(`${P}/tickets/checkin`, { code: v.ticketCode }, T);
 }
+// Promo codes
+await req(`${P}/tickets/promos`, { code: 'student20', kind: 'PERCENT', value: 20, maxUses: 2, categoryIds: [cats[0].id] }, T);
+await req(`${P}/tickets/promos`, { code: 'GROUP4', kind: 'FLAT', value: 300, minQty: 4 }, T);
+const dupe = await req(`${P}/tickets/promos`, { code: 'STUDENT20', kind: 'FLAT', value: 10 }, T).then(() => true, () => false);
+assert(!dupe, 'promo codes are unique per league');
+const quote = await req('/public/tickets/promo', { categoryId: cats[0].id, qty: 2, code: ' Student20 ' });
+assert(quote.discount === 80 && quote.total === 318, 'percent promo priced correctly');
+const wrongCat = await req('/public/tickets/promo', { categoryId: cats[1].id, qty: 2, code: 'STUDENT20' }).then(() => true, () => false);
+assert(!wrongCat, 'promo limited to its ticket types');
+for (let k = 0; k < 2; k++) { const pay = await req('/public/tickets/order', { categoryId: cats[0].id, qty: 2, buyerName: `Student ${k + 1}`, email: `student${k + 1}@example.com`, promoCode: 'STUDENT20' }); await req('/payments/verify', { paymentId: pay.paymentId }); }
+const usedUp = await req('/public/tickets/promo', { categoryId: cats[0].id, qty: 2, code: 'STUDENT20' }).then(() => true, () => false);
+assert(!usedUp, 'promo stops at its use limit');
+const grp = await req('/public/tickets/order', { categoryId: cats[1].id, qty: 4, buyerName: 'Office group', email: 'group@example.com', promoCode: 'GROUP4' });
+await req('/payments/verify', { paymentId: grp.paymentId });
+const promos = await req(`${P}/tickets/promos`, null, T);
+assert(promos.find((x) => x.code === 'GROUP4').revenue === 4 * 499 - 300, 'net revenue after promo');
+
+// NPS survey for fans
+const sv = await req(`${P}/surveys`, { title: 'Opening week fan experience', audience: 'FANS' }, T);
+const sentSv = await req(`${P}/surveys/${sv.id}/send-to-ticket-buyers`, {}, T);
+const scores = [10, 9, 9, 8, 10, 7, 6, 9, 10, 4, 9, 8];
+const comments = ['Great atmosphere!', 'Loved the live scoring on my phone', '', 'Food queues were long', 'Will bring my family next time', '', 'Parking was a mess', 'Superb sixes', '', 'Too hot, need more shade', 'Well organised', ''];
+for (const [k, sc] of scores.entries()) await req(`/public/surveys/${sv.token}`, { score: sc, comment: comments[k] || undefined, email: `fan${k + 1}@example.com` });
+const again = await req(`/public/surveys/${sv.token}`, { score: 10, email: 'fan1@example.com' }).then(() => true, () => false);
+assert(!again, 'one response per email');
+const svr = await req(`${P}/surveys/${sv.id}`, null, T);
+assert(svr.nps.responses === 12 && svr.nps.score === 42, 'NPS computed: ' + svr.nps.score);
+console.log('tickets: promo codes applied; NPS', svr.nps.score, 'from', svr.nps.responses, 'fans; survey emailed to', sentSv.sent);
+
+// Deck: create, add an image slide, share a watermarked expiring link
+const deck = await req(`${P}/studio/decks`, { type: 'sponsorship', audience: 'FreshBrew Beverages' }, T);
+await req(`${P}/studio/decks/${deck.id}`, { slides: [...deck.slides, { layout: 'image', title: 'Last season in pictures', imageUrl: face('Crowd', 200), caption: 'Sold-out final at Wankhede Turf A', notes: 'Mention 1.2M stream views' }] }, T, 'PATCH');
+const share = await req(`${P}/studio/decks/${deck.id}/shares`, { label: 'FreshBrew — Anita Rao', expiresInDays: 7 }, T);
+const sharedDeck = await req(`/public/decks/${share.token}`);
+assert(sharedDeck.watermark.includes('FreshBrew') && sharedDeck.slides.at(-1).imageUrl.startsWith('/files/') && !sharedDeck.slides.some((x) => x.notes), 'shared deck is watermarked, images stored, notes hidden');
+await req(`${P}/studio/decks/${deck.id}/shares/${share.id}/revoke`, {}, T);
+const gone = await req(`/public/decks/${share.token}`).then(() => true, () => false);
+assert(!gone, 'revoked link stops working');
+await req(`${P}/studio/decks/${deck.id}/shares`, { label: 'FreshBrew — Anita Rao (v2)', expiresInDays: 14 }, T);
 
 // ---- Accreditation ----
 await req(`${P}/accreditation`, null, T);

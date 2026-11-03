@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { ah, HttpError } from '../lib/http.js';
@@ -13,7 +14,8 @@ const r = Router({ mergeParams: true });
 r.use(requireAuth);
 
 const slideSchema = z.object({
-  layout: z.enum(['cover', 'bullets', 'stats', 'table', 'closing']), title: z.string(), subtitle: z.string().optional(),
+  layout: z.enum(['cover', 'bullets', 'stats', 'table', 'closing', 'image']), title: z.string(), subtitle: z.string().optional(),
+  imageUrl: z.string().optional(), caption: z.string().optional(), notes: z.string().optional(),
   bullets: z.array(z.string()).optional(), stats: z.array(z.object({ label: z.string(), value: z.string() })).optional(), rows: z.array(z.array(z.string())).optional(),
 });
 
@@ -50,6 +52,29 @@ r.patch('/decks/:id', ah(async (req, res) => {
   await assertLeague(me(req), req.params.leagueId, 'staff');
   const d = z.object({ title: z.string().optional(), slides: z.array(slideSchema).optional() }).parse(req.body);
   res.json(await prisma.deck.update({ where: { id: req.params.id, leagueId: req.params.leagueId }, data: d }));
+}));
+
+// ---------- Share links (view-only, expiring, watermarked) ----------
+r.get('/decks/:id/shares', ah(async (req, res) => {
+  await assertLeague(me(req), req.params.leagueId, 'staff');
+  await prisma.deck.findFirstOrThrow({ where: { id: req.params.id, leagueId: req.params.leagueId } });
+  res.json(await prisma.deckShare.findMany({ where: { deckId: req.params.id }, orderBy: { createdAt: 'desc' } }));
+}));
+r.post('/decks/:id/shares', ah(async (req, res) => {
+  const u = me(req);
+  await assertLeague(u, req.params.leagueId, 'staff');
+  await prisma.deck.findFirstOrThrow({ where: { id: req.params.id, leagueId: req.params.leagueId } });
+  const d = z.object({ label: z.string().min(2).max(80), watermark: z.string().max(80).optional(), expiresInDays: z.coerce.number().int().min(1).max(90).nullable().default(14), allowDownload: z.boolean().default(false) }).parse(req.body);
+  const share = await prisma.deckShare.create({ data: {
+    deckId: req.params.id, token: crypto.randomBytes(18).toString('base64url'), label: d.label, watermark: d.watermark || `Confidential — prepared for ${d.label}`,
+    allowDownload: d.allowDownload, expiresAt: d.expiresInDays ? new Date(Date.now() + d.expiresInDays * 864e5) : null, createdBy: u.name,
+  } });
+  await audit(u.id, 'share', 'Deck', req.params.id, { label: d.label, expiresAt: share.expiresAt });
+  res.status(201).json(share);
+}));
+r.post('/decks/:id/shares/:sid/revoke', ah(async (req, res) => {
+  await assertLeague(me(req), req.params.leagueId, 'staff');
+  res.json(await prisma.deckShare.update({ where: { id: req.params.sid, deckId: req.params.id }, data: { revokedAt: new Date() } }));
 }));
 
 r.delete('/decks/:id', ah(async (req, res) => {
@@ -132,3 +157,15 @@ export async function createContractDraft(leagueId: string, templateKey: string,
 }
 
 export default r;
+
+/** Public, view-only deck link: /api/public/decks/:token */
+export const publicDecks = Router();
+publicDecks.get('/:token', ah(async (req, res) => {
+  const s = await prisma.deckShare.findUnique({ where: { token: req.params.token }, include: { deck: { include: { league: { select: { name: true, logoUrl: true, primaryColor: true } } } } } });
+  if (!s || s.revokedAt) throw new HttpError(404, 'This link is not available');
+  if (s.expiresAt && s.expiresAt < new Date()) throw new HttpError(410, 'This link has expired — ask the league for a new one');
+  await prisma.deckShare.update({ where: { id: s.id }, data: { views: { increment: 1 }, lastViewedAt: new Date() } });
+  const slides = (s.deck.slides as Record<string, unknown>[]).map(({ notes: _n, ...x }) => x); // speaker notes stay private
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ title: s.deck.title, brand: { name: s.deck.league.name, logoUrl: s.deck.league.logoUrl, color: s.deck.league.primaryColor }, slides, watermark: s.watermark, allowDownload: s.allowDownload, expiresAt: s.expiresAt });
+}));
