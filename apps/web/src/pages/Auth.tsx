@@ -50,6 +50,7 @@ export function Login() {
         <ErrorText error={error} />
         <Field label="Email"><Input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
         <Field label="Password"><Input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+        <div className="-mt-2 text-right"><Link to="/forgot-password" className="text-xs font-semibold text-brand-700 hover:underline">Forgot password?</Link></div>
         <Button className="w-full" size="lg" loading={loading}>Log in</Button>
       </form>
       <p className="mt-6 text-center text-sm text-ink-500">New to SportsIQ? <Link to="/register" className="font-semibold text-brand-700 hover:underline">Create an account</Link></p>
@@ -75,12 +76,13 @@ export function Register() {
   const [params] = useSearchParams();
   const [role, setRole] = useState(params.get('role') ?? 'LEAGUE_OWNER');
   const [f, setF] = useState({ name: '', email: '', phone: '', password: '', companyName: '', city: '', industry: '', playingRole: '' });
+  const [terms, setTerms] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setLoading(true); setError(null);
-    try { const u = await register({ ...f, role }); nav(u.role === 'LEAGUE_OWNER' ? '/leagues/new' : homeFor(u.role)); } catch (err) { setError(err); } finally { setLoading(false); }
+    try { const u = await register({ ...f, role, acceptTerms: terms }); nav(u.role === 'LEAGUE_OWNER' ? '/leagues/new' : homeFor(u.role)); } catch (err) { setError(err); } finally { setLoading(false); }
   };
   return (
     <AuthLayout title="Create your account" subtitle="Start with a 14-day free trial. No card required.">
@@ -109,7 +111,8 @@ export function Register() {
           {role === 'PLAYER' && <Field label="Playing role"><Select value={f.playingRole} onChange={set('playingRole')} placeholder="Select" options={['Batter', 'Bowler', 'All-rounder', 'Wicket-keeper']} /></Field>}
         </div>
         <Field label="Password" hint="At least 8 characters"><Input type="password" required minLength={8} value={f.password} onChange={set('password')} /></Field>
-        <Button className="w-full" size="lg" loading={loading}>Create account</Button>
+        <label className="flex gap-2 text-sm text-ink-700"><input type="checkbox" className="mt-1" checked={terms} onChange={(e) => setTerms(e.target.checked)} /><span>I agree to the <Link to="/terms" target="_blank" className="font-semibold text-brand-700 hover:underline">Terms of Service</Link> and <Link to="/privacy" target="_blank" className="font-semibold text-brand-700 hover:underline">Privacy Policy</Link>, and I am 18+ (or have a parent/guardian's consent).</span></label>
+        <Button className="w-full" size="lg" loading={loading} disabled={!terms}>Create account</Button>
       </form>
       <p className="mt-6 text-center text-sm text-ink-500">Already have an account? <Link to="/login" className="font-semibold text-brand-700 hover:underline">Log in</Link></p>
     </AuthLayout>

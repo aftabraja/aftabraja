@@ -26,11 +26,28 @@ import reports from './routes/reports.js';
 import talent from './routes/talent.js';
 import { PLAYBOOK } from './data/playbook.js';
 import { subscribe } from './lib/realtime.js';
+import rateLimit from 'express-rate-limit';
+import { persistUploads, UPLOAD_DIR } from './lib/storage.js';
 
 const app = express();
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') ?? true }));
-app.use(express.json({ limit: '5mb' })); // logos/attachments as data URLs (move to object storage later)
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
+app.use(express.json({ limit: '8mb' }));
+// Rate limits: brute-force protection on auth, and a general ceiling per IP
+const noLimits = process.env.DISABLE_RATE_LIMIT === 'true'; // automated tests only
+const limiter = (windowMin: number, max: number, message: string, byEmail = false) => rateLimit({
+  windowMs: windowMin * 60_000, max, standardHeaders: true, legacyHeaders: false, message: { error: message }, skip: () => noLimits,
+  ...(byEmail && { keyGenerator: (req) => `${req.ip}|${String(req.body?.email ?? '').toLowerCase()}` }),
+});
+app.use('/api/auth/login', limiter(15, 10, 'Too many login attempts. Please wait 15 minutes and try again.', true));
+app.use('/api/auth/forgot-password', limiter(60, 5, 'Too many reset requests. Please try again later.', true));
+app.use('/api/auth/register', limiter(60, 20, 'Too many sign-ups from this network. Please try again later.'));
+app.use('/api/public', limiter(10, 300, 'Too many requests. Please slow down.'));
+app.use('/api', limiter(1, 1200, 'Too many requests. Please slow down.'));
+// Uploaded files live in file storage, never in the database
+app.use(persistUploads);
+app.use('/files', (_req, res, next) => { res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'"); res.setHeader('X-Content-Type-Options', 'nosniff'); next(); }, express.static(UPLOAD_DIR, { maxAge: '365d', immutable: true }));
 app.use(morgan('dev'));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'sportsiq-api' }));

@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, BookOpenCheck, Building2, ChevronDown, CircleDollarSign, FileText, Handshake, LayoutDashboard, LogOut, Menu,
-  MessageSquare, Search, Settings, Shield, ShieldCheck, Store, Trophy, User as UserIcon, Users, UsersRound, Wallet, X, ScrollText, Megaphone, Presentation, FileSignature, Gavel, CalendarDays, Plane, ClipboardCheck, Ticket, IdCard, BarChart3, Star,
+  MessageSquare, Search, Settings, Shield, ShieldCheck, Store, Trophy, User as UserIcon, Users, UsersRound, Wallet, X, ScrollText, Megaphone, Presentation, FileSignature, Gavel, CalendarDays, Plane, ClipboardCheck, Ticket, IdCard, BarChart3, Star, Mail,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { get, post } from '../lib/api';
@@ -37,6 +37,7 @@ function useNav(): { title?: string; items: NavItem[] }[] {
           { to: '/admin/sponsors', label: 'Sponsors & Inventory', icon: i(Handshake) },
           { to: '/admin/talent', label: 'Agencies & Talent', icon: i(Star) },
           { to: '/admin/transactions', label: 'Transactions', icon: i(Wallet) },
+          { to: '/admin/emails', label: 'Email Outbox', icon: i(Mail) },
           { to: '/admin/audit', label: 'Audit Log', icon: i(ScrollText) },
         ] },
         ...(leagueId && league.data ? leagueNav(leagueId, league.data, i) : []),

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Handshake, IndianRupee, Search, Store, Trophy, Users } from 'lucide-react';
-import { get, patch } from '../../lib/api';
+import { get, patch, post } from '../../lib/api';
 import { ago, date, inr, inrShort, ROLE_LABEL } from '../../lib/format';
 import { Avatar, Badge, Button, Card, Input, PageHeader, Progress, Select, Spinner, Stat, StatusBadge, Table, Tabs } from '../../components/ui';
 
@@ -80,6 +80,7 @@ export function AdminUsers() {
   const u = useQuery({ queryKey: ['admin-users', params], queryFn: () => get<any[]>(`/admin/users?${params}`) });
   const toggle = useMutation({ mutationFn: ({ id, isActive }: any) => patch(`/admin/users/${id}`, { isActive }), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }) });
   const activate = useMutation({ mutationFn: (id: string) => patch(`/admin/users/${id}/subscription`, { status: 'ACTIVE', months: 12 }), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }) });
+  const erase = useMutation({ mutationFn: (id: string) => post(`/admin/users/${id}/erase`), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }) });
   return (
     <>
       <PageHeader title="Users & Subscriptions" />
@@ -100,10 +101,11 @@ export function AdminUsers() {
                   <td className="td">{s ? (s.amount ? inr(s.amount) : 'Free') : '—'}</td>
                   <td className="td">{s ? <span className="flex items-center gap-2"><StatusBadge status={s.status} /><span className="text-xs text-ink-500">till {date(s.validTill)}</span></span> : '—'}</td>
                   <td className="td">{date(x.createdAt)}</td>
-                  <td className="td">{x.isActive ? <Badge color="green">Active</Badge> : <Badge color="red">Disabled</Badge>}</td>
+                  <td className="td">{x.isActive ? <Badge color="green">Active</Badge> : <Badge color="red">Disabled</Badge>}{x.deletionRequestedAt && x.isActive && <Badge color="amber" className="ml-1">Deletion requested</Badge>}</td>
                   <td className="td text-right"><div className="flex justify-end gap-1">
                     {s && s.status !== 'ACTIVE' && <Button size="sm" variant="secondary" onClick={() => activate.mutate(x.id)}>Activate plan</Button>}
                     {x.role !== 'SUPER_ADMIN' && <Button size="sm" variant="ghost" onClick={() => toggle.mutate({ id: x.id, isActive: !x.isActive })}>{x.isActive ? 'Disable' : 'Enable'}</Button>}
+                    {x.deletionRequestedAt && x.isActive && <Button size="sm" variant="danger" onClick={() => confirm(`Erase personal data of ${x.name}? This cannot be undone.`) && erase.mutate(x.id)}>Erase data</Button>}
                   </div></td>
                 </tr>
               );
@@ -235,6 +237,31 @@ export function AdminTalent() {
               </Table>
             </Card>
           ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+export function AdminEmails() {
+  const e = useQuery({ queryKey: ['admin-emails'], queryFn: () => get<any[]>('/admin/emails') });
+  const [open, setOpen] = useState<any>(null);
+  return (
+    <>
+      <PageHeader title="Email Outbox" subtitle="Every email SportsIQ sends. When SMTP isn't configured, emails are recorded here as 'logged' instead of being delivered." />
+      <Card padded={false}>
+        {e.isLoading ? <Spinner /> : (
+          <Table head={['When', 'To', 'Subject', 'Status', '']}>
+            {e.data!.map((m) => <tr key={m.id}><td className="td">{ago(m.createdAt)}</td><td className="td">{m.to}</td><td className="td text-ink-900">{m.subject}</td><td className="td"><Badge color={m.status === 'SENT' ? 'green' : m.status === 'FAILED' ? 'red' : 'amber'}>{m.status.toLowerCase()}</Badge></td><td className="td text-right"><Button size="sm" variant="secondary" onClick={() => setOpen(m)}>View</Button></td></tr>)}
+          </Table>
+        )}
+      </Card>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 p-4" onClick={() => setOpen(null)}>
+          <div className="h-[80vh] w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-pop" onClick={(ev) => ev.stopPropagation()}>
+            <div className="border-b border-ink-100 px-5 py-3 text-sm"><b>{open.subject}</b> → {open.to}{open.error && <span className="ml-2 text-red-600">{open.error}</span>}</div>
+            <iframe title="Email preview" sandbox="" srcDoc={open.html} className="h-full w-full" />
+          </div>
         </div>
       )}
     </>

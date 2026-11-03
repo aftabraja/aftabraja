@@ -67,6 +67,8 @@ model User {
   role         Role
   avatarUrl    String?
   isActive     Boolean  @default(true)
+  acceptedTermsAt DateTime?
+  deletionRequestedAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -83,6 +85,7 @@ model User {
   messages          Message[]
   subscriptions     Subscription[]
   auditLogs         AuditLog[]
+  tokens            AuthToken[]
 }
 
 model Subscription {
@@ -828,4 +831,27 @@ model TalentEnquiry {
   conversationId String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+// ======================= Accounts & email =======================
+
+model AuthToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  purpose   String // RESET, INVITE
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  to        String
+  subject   String
+  html      String
+  status    String // SENT, LOGGED (no SMTP configured), FAILED
+  error     String?
+  createdAt DateTime @default(now())
 }

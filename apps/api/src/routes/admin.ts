@@ -46,7 +46,7 @@ r.get('/users', ah(async (req, res) => {
     orderBy: { createdAt: 'desc' },
     take: 500,
     select: {
-      id: true, name: true, email: true, phone: true, role: true, isActive: true, createdAt: true,
+      id: true, name: true, email: true, phone: true, role: true, isActive: true, createdAt: true, deletionRequestedAt: true,
       subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 },
       vendorProfile: { select: { companyName: true } }, sponsorProfile: { select: { companyName: true } },
     },
@@ -124,6 +124,24 @@ r.patch('/talents/:id', ah(async (req, res) => {
   if (d.verified) await notify(t.agency.userId, `${t.name}'s profile is verified`, { type: 'success', link: '/agent' });
   if (d.isPublished === false) await notify(t.agency.userId, `${t.name}'s profile was unpublished by SportsIQ`, { type: 'warning', link: '/agent' });
   res.json(t);
+}));
+
+r.get('/emails', ah(async (_req, res) => {
+  res.json(await prisma.emailLog.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }));
+}));
+
+// DPDP erasure: anonymise personal data while keeping financial/audit records intact
+r.post('/users/:id/erase', ah(async (req, res) => {
+  const u = await prisma.user.findUniqueOrThrow({ where: { id: req.params.id } });
+  if (u.role === 'SUPER_ADMIN') return res.status(400).json({ error: 'Cannot erase a super admin' });
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: u.id }, data: { name: 'Deleted user', email: `deleted-${u.id}@deleted.sportsiq.invalid`, phone: null, avatarUrl: null, isActive: false, passwordHash: '!' } }),
+    prisma.playerProfile.updateMany({ where: { userId: u.id }, data: { bio: null, dob: null, videoUrl: null, city: null, state: null } }),
+    prisma.notification.deleteMany({ where: { userId: u.id } }),
+    prisma.authToken.deleteMany({ where: { userId: u.id } }),
+  ]);
+  await audit(me(req).id, 'erase-user', 'User', u.id);
+  res.json({ ok: true });
 }));
 
 r.get('/audit', ah(async (_req, res) => {

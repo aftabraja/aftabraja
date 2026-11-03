@@ -27,7 +27,7 @@ const roles = ['Batter', 'Bowler', 'All-rounder', 'Wicket-keeper'];
 for (let i = 0; i < first.length; i++) {
   const email = `p${i + 100}@demo.sportsiq.in`;
   let tok;
-  try { tok = (await req('/auth/register', { name: `${first[i]} ${last[i % last.length]}`, email, password: 'Demo@1234', role: 'PLAYER', city: 'Mumbai', playingRole: roles[i % 4] })).token; }
+  try { tok = (await req('/auth/register', { name: `${first[i]} ${last[i % last.length]}`, email, password: 'Demo@1234', role: 'PLAYER', city: 'Mumbai', playingRole: roles[i % 4], acceptTerms: true })).token; }
   catch { tok = await login(email); }
   await req(`/players/register/${L.id}`, {}, tok).catch(() => {});
 }

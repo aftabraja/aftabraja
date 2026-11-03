@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, MessageSquare, Send } from 'lucide-react';
 import { get, post } from '../lib/api';
 import { checkout } from '../lib/pay';
+import { download } from '../lib/download';
 import { useAuth } from '../lib/auth';
 import { ago, date, inr, ROLE_LABEL } from '../lib/format';
 import { Avatar, Badge, Button, Card, Empty, ErrorText, Field, Input, PageHeader, Spinner, StatusBadge, cx } from '../components/ui';
@@ -121,6 +122,7 @@ export function Notifications() {
 export function Account() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const delReq = useMutation({ mutationFn: () => post('/auth/me/delete-request') });
   const pay = useMutation({ mutationFn: async () => checkout(await post('/payments/subscription')), onSuccess: () => { qc.invalidateQueries(); window.location.reload(); } });
   const [pw, setPw] = useState({ current: '', next: '' });
   const change = useMutation({ mutationFn: () => post('/auth/change-password', pw), onSuccess: () => setPw({ current: '', next: '' }) });
@@ -154,7 +156,13 @@ export function Account() {
         </div>
         <div className="mt-3"><ErrorText error={change.error} />{change.isSuccess && <p className="text-sm text-emerald-700">Password updated.</p>}</div>
       </Card>
-      {user?.role !== 'SUPER_ADMIN' && <p className="text-center text-xs text-ink-400"><Link to="/" className="hover:underline">SportsIQ home</Link></p>}
+      <Card title="Your data & privacy">
+        <p className="text-sm text-ink-500">Under India's DPDP Act you can access your data and ask us to erase it. See our <Link to="/privacy" className="text-brand-700 hover:underline">Privacy Policy</Link>.</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => download('/auth/me/export', 'sportsiq-my-data.json')}>Download my data</Button>
+          <Button variant="ghost" className="text-red-600" loading={delReq.isPending} disabled={delReq.isSuccess} onClick={() => confirm('Request deletion of your account? Our team will process it and confirm by email. Records we must keep by law (e.g. invoices) are retained.') && delReq.mutate()}>{delReq.isSuccess ? 'Deletion requested' : 'Request account deletion'}</Button>
+        </div>
+      </Card>
     </div>
   );
 }

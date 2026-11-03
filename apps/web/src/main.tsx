@@ -8,6 +8,8 @@ import { AppShell } from './components/AppShell';
 import { VendorPanelProvider } from './components/VendorPanel';
 import { Spinner } from './components/ui';
 import Landing from './pages/Landing';
+import { Privacy, Terms } from './pages/Legal';
+import { ForgotPassword, SetPassword } from './pages/Password';
 import { Login, Register } from './pages/Auth';
 import { CreateLeague, LeaguesPage } from './pages/Leagues';
 import LeagueDashboard from './pages/league/Dashboard';
@@ -36,7 +38,7 @@ import TalentMarket from './pages/Talent';
 import AgentHome from './pages/Agent';
 import AccredApply from './pages/AccredApply';
 import { PublicLeague, PublicMatch, TicketView } from './pages/Public';
-import { AdminAudit, AdminLeagues, AdminOverview, AdminSponsors, AdminTalent, AdminTransactions, AdminUsers, AdminVendors } from './pages/admin/Admin';
+import { AdminAudit, AdminLeagues, AdminOverview, AdminSponsors, AdminEmails, AdminTalent, AdminTransactions, AdminUsers, AdminVendors } from './pages/admin/Admin';
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 
@@ -66,6 +68,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
               <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<SetPassword />} />
+              <Route path="/set-password" element={<SetPassword />} />
               <Route path="/l/:slug" element={<PublicLeague />} />
               <Route path="/l/:slug/match/:mid" element={<PublicMatch />} />
               <Route path="/ticket/:code" element={<TicketView />} />
@@ -100,6 +107,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="/talent" element={<Protected roles={['LEAGUE_OWNER', 'LEAGUE_STAFF', 'SPONSOR']}><TalentMarket /></Protected>} />
                 <Route path="/agent" element={<Protected roles={['TALENT_AGENT']}><AgentHome /></Protected>} />
                 <Route path="/admin/talent" element={<Protected roles={[]}><AdminTalent /></Protected>} />
+                <Route path="/admin/emails" element={<Protected roles={[]}><AdminEmails /></Protected>} />
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/messages/:cid" element={<Messages />} />
                 <Route path="/notifications" element={<Notifications />} />

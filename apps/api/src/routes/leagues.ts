@@ -7,7 +7,10 @@ import { ah, HttpError } from '../lib/http.js';
 import { me, requireAuth, requireRole } from '../lib/auth.js';
 import { assertLeague, leagueAccess } from '../lib/access.js';
 import { audit, leagueManagers, notify } from '../lib/notify.js';
-import { slugify, tempPassword } from '../lib/util.js';
+import crypto from 'node:crypto';
+import { slugify } from '../lib/util.js';
+import { appUrl, layout, mailConfigured, sendEmail } from '../lib/mailer.js';
+import { issueToken } from '../lib/tokens.js';
 import { financeSummary } from '../lib/finance.js';
 import { ALL_STEPS, PLAYBOOK, STEP_KEYS } from '../data/playbook.js';
 
@@ -213,20 +216,25 @@ r.delete('/:id/teams/:teamId', ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
-/** Create (or attach) a user account and return a temporary password when newly created. */
-async function ensureUser(name: string, email: string, phone: string | undefined, role: 'TEAM_OWNER' | 'LEAGUE_STAFF') {
+/**
+ * Create (or attach) a user account. New users get an emailed invitation link to set their
+ * own password. If email is not configured, the link is returned so the inviter can share it.
+ */
+async function ensureUser(name: string, email: string, phone: string | undefined, role: 'TEAM_OWNER' | 'LEAGUE_STAFF', invitedBy: string, context: string) {
   const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (existing) return { user: existing, tempPassword: null as string | null };
-  const pwd = tempPassword();
-  const user = await prisma.user.create({ data: { name, email: email.toLowerCase(), phone, role, passwordHash: await bcrypt.hash(pwd, 10) } });
-  return { user, tempPassword: pwd };
+  if (existing) return { user: existing, inviteUrl: null as string | null, emailed: false };
+  const user = await prisma.user.create({ data: { name, email: email.toLowerCase(), phone, role, passwordHash: await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10) } });
+  const token = await issueToken(user.id, 'INVITE', 24 * 7);
+  const url = `${appUrl()}/set-password?token=${token}`;
+  const { delivered } = await sendEmail(user.email, `${invitedBy} invited you to SportsIQ`, layout(`You're invited to ${context}`, `<p>Hi ${name},</p><p>${invitedBy} added you on SportsIQ as part of <b>${context}</b>. Set your password to get started. This link is valid for 7 days.</p>`, { label: 'Accept invitation', url }));
+  return { user, inviteUrl: mailConfigured() ? null : url, emailed: delivered };
 }
 
 r.post('/:id/teams/:teamId/owners', ah(async (req, res) => {
   await assertLeague(me(req), req.params.id, 'staff');
   const d = z.object({ name: z.string().min(2), email: z.string().email(), phone: z.string().optional(), sharePct: z.coerce.number().min(0).max(100).default(100) }).parse(req.body);
   const team = await prisma.team.findFirstOrThrow({ where: { id: req.params.teamId, leagueId: req.params.id }, include: { league: true } });
-  const { user, tempPassword } = await ensureUser(d.name, d.email, d.phone, 'TEAM_OWNER');
+  const { user, inviteUrl, emailed } = await ensureUser(d.name, d.email, d.phone, 'TEAM_OWNER', me(req).name, `${team.name} — ${team.league.name}`);
   await prisma.teamOwner.upsert({
     where: { teamId_userId: { teamId: team.id, userId: user.id } },
     update: { sharePct: d.sharePct },
@@ -234,7 +242,7 @@ r.post('/:id/teams/:teamId/owners', ah(async (req, res) => {
   });
   await notify(user.id, `You are now an owner of ${team.name} in ${team.league.name}`, { link: `/leagues/${team.leagueId}/teams`, type: 'success' });
   await audit(me(req).id, 'add-owner', 'Team', team.id, { userId: user.id });
-  res.status(201).json({ user: { id: user.id, name: user.name, email: user.email }, tempPassword });
+  res.status(201).json({ user: { id: user.id, name: user.name, email: user.email }, inviteUrl, emailed });
 }));
 
 r.delete('/:id/teams/:teamId/owners/:userId', ah(async (req, res) => {
@@ -253,14 +261,14 @@ r.post('/:id/members', ah(async (req, res) => {
   await assertLeague(me(req), req.params.id, 'admin');
   const d = z.object({ name: z.string().min(2), email: z.string().email(), phone: z.string().optional(), department: z.string().min(2), title: z.string().optional() }).parse(req.body);
   const league = await prisma.league.findUniqueOrThrow({ where: { id: req.params.id } });
-  const { user, tempPassword } = await ensureUser(d.name, d.email, d.phone, 'LEAGUE_STAFF');
+  const { user, inviteUrl, emailed } = await ensureUser(d.name, d.email, d.phone, 'LEAGUE_STAFF', me(req).name, `${league.name} management`);
   await prisma.leagueMember.upsert({
     where: { leagueId_userId: { leagueId: league.id, userId: user.id } },
     update: { department: d.department, title: d.title },
     create: { leagueId: league.id, userId: user.id, department: d.department, title: d.title },
   });
   await notify(user.id, `You were added to ${league.name} management (${d.department})`, { link: `/leagues/${league.id}`, type: 'success' });
-  res.status(201).json({ user: { id: user.id, name: user.name, email: user.email }, tempPassword });
+  res.status(201).json({ user: { id: user.id, name: user.name, email: user.email }, inviteUrl, emailed });
 }));
 
 r.delete('/:id/members/:userId', ah(async (req, res) => {
