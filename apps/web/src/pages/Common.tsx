@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, MessageSquare, Send } from 'lucide-react';
 import { get, post } from '../lib/api';
+import { checkout } from '../lib/pay';
 import { useAuth } from '../lib/auth';
 import { ago, date, inr, ROLE_LABEL } from '../lib/format';
 import { Avatar, Badge, Button, Card, Empty, ErrorText, Field, Input, PageHeader, Spinner, StatusBadge, cx } from '../components/ui';
@@ -119,6 +120,8 @@ export function Notifications() {
 
 export function Account() {
   const { user } = useAuth();
+  const qc = useQueryClient();
+  const pay = useMutation({ mutationFn: async () => checkout(await post('/payments/subscription')), onSuccess: () => { qc.invalidateQueries(); window.location.reload(); } });
   const [pw, setPw] = useState({ current: '', next: '' });
   const change = useMutation({ mutationFn: () => post('/auth/change-password', pw), onSuccess: () => setPw({ current: '', next: '' }) });
   const sub = user?.subscriptions?.[0];
@@ -134,7 +137,13 @@ export function Account() {
             <div><p className="text-sm text-ink-500">{ROLE_LABEL[sub.plan] ?? sub.plan} plan</p><p className="text-2xl font-bold">{sub.amount ? inr(sub.amount) : 'Free'}</p><p className="text-xs text-ink-500">Valid till {date(sub.validTill)}</p></div>
             <StatusBadge status={sub.status} />
           </div>
-          {sub.status === 'TRIAL' && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">You're on a free trial. Online payment activation is coming soon — contact SportsIQ to activate your plan.</p>}
+          {sub.status !== 'ACTIVE' && sub.amount > 0 && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+              <span>{sub.status === 'TRIAL' ? "You're on a free trial." : 'Your plan has expired.'} Activate your plan to keep full access.</span>
+              <Button size="sm" loading={pay.isPending} onClick={() => pay.mutate()}>Pay {inr(sub.amount)}</Button>
+            </div>
+          )}
+          <ErrorText error={pay.error} />
         </Card>
       )}
       <Card title="Change password">

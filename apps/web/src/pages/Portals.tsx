@@ -218,6 +218,7 @@ export function PlayerHome() {
           </div>
         </Card>
         <div className="space-y-6">
+          <PlayerTrials />
           <Card title="My registrations" padded={false}>
             {!p.data.registrations.length ? <Empty title="Not registered yet" text="Register for an open league below." /> : (
               <ul className="divide-y divide-ink-100">
@@ -248,5 +249,36 @@ export function PlayerHome() {
         </div>
       </div>
     </>
+  );
+}
+
+function PlayerTrials() {
+  const qc = useQueryClient();
+  const t = useQuery({ queryKey: ['my-trials'], queryFn: () => get<any[]>('/players/trials') });
+  const reg = useMutation({ mutationFn: (id: string) => post(`/players/trials/${id}/register`), onSuccess: () => qc.invalidateQueries({ queryKey: ['my-trials'] }) });
+  if (!t.data?.length) return null;
+  return (
+    <Card title="Trials" padded={false}>
+      <ul className="divide-y divide-ink-100">
+        {t.data.map((x) => (
+          <li key={x.id} className="px-5 py-4">
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">{x.title}</p>
+                <p className="text-xs text-ink-500">{x.league.name} · {new Date(x.date).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {[x.venue, x.city].filter(Boolean).join(', ')}</p>
+              </div>
+              {!x.myPass && <Button size="sm" disabled={x.full} loading={reg.isPending && reg.variables === x.id} onClick={() => reg.mutate(x.id)}>{x.full ? 'Full' : 'Register'}</Button>}
+            </div>
+            {x.myPass && (
+              <div className="mt-3 flex items-center gap-4 rounded-xl border border-ink-200 p-3">
+                <img src={`/api/qr?data=${encodeURIComponent(x.myPass.code)}`} alt="Trial pass QR" className="h-24 w-24" />
+                <div><p className="text-xs text-ink-500">Your trial pass — show at the gate</p><p className="font-mono text-lg font-bold">{x.myPass.code}</p>{x.myPass.checkedInAt && <Badge color="green">Checked in</Badge>}</div>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      {reg.error && <div className="p-3"><ErrorText error={reg.error} /></div>}
+    </Card>
   );
 }

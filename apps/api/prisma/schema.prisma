@@ -128,6 +128,17 @@ model League {
   conversations Conversation[]
   decks         Deck[]
   contracts     Contract[]
+  venues        Venue[]
+  matches       Match[]
+  auction       Auction?
+  trials        TrialEvent[]
+  hotels        Hotel[]
+  travel        TravelBooking[]
+  ticketCategories TicketCategory[]
+  accredConfig  AccredConfig?
+  accredZones   AccredZone[]
+  accredCategories AccredCategory[]
+  accreditations Accreditation[]
 }
 
 model LeagueMember {
@@ -171,6 +182,8 @@ model Team {
 
   owners  TeamOwner[]
   players PlayerRegistration[]
+  homeMatches Match[] @relation("HomeMatches")
+  awayMatches Match[] @relation("AwayMatches")
 }
 
 model TeamOwner {
@@ -212,6 +225,7 @@ model PlayerRegistration {
   player     PlayerProfile      @relation(fields: [playerId], references: [id], onDelete: Cascade)
   status     RegistrationStatus @default(APPLIED)
   category   String? // Icon, A, B, C, Emerging
+  isOverseas Boolean            @default(false)
   basePrice  Int?
   soldPrice  Int?
   teamId     String?
@@ -416,4 +430,307 @@ model Contract {
   acknowledgedAt DateTime? // user confirmed the "verify with a lawyer" notice
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+// ======================= Phase 2: Season operations =======================
+
+model Venue {
+  id       String  @id @default(cuid())
+  leagueId String
+  league   League  @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  name     String
+  city     String?
+  address  String?
+  capacity Int?
+  matches  Match[]
+}
+
+model Match {
+  id            String    @id @default(cuid())
+  leagueId      String
+  league        League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  number        Int
+  stage         String    @default("League") // League, Qualifier 1, Eliminator, Qualifier 2, Semi-final, Final
+  homeTeamId    String?
+  homeTeam      Team?     @relation("HomeMatches", fields: [homeTeamId], references: [id], onDelete: SetNull)
+  awayTeamId    String?
+  awayTeam      Team?     @relation("AwayMatches", fields: [awayTeamId], references: [id], onDelete: SetNull)
+  homeLabel     String? // placeholder for playoffs, e.g. "1st place"
+  awayLabel     String?
+  venueId       String?
+  venue         Venue?    @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  startsAt      DateTime?
+  status        String    @default("SCHEDULED") // SCHEDULED, LIVE, COMPLETED, ABANDONED
+  oversPerSide  Int?
+  tossWinnerId  String?
+  tossDecision  String? // BAT, BOWL
+  homeXI        String[]  @default([])
+  awayXI        String[]  @default([])
+  currentInnings Int      @default(1)
+  winnerTeamId  String?
+  resultText    String?
+  isPublished   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  balls        Ball[]
+  ticketCategories TicketCategory[]
+}
+
+/// Cricket: one row per legal or illegal delivery
+model Ball {
+  id         String   @id @default(cuid())
+  matchId    String
+  match      Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  seq        Int
+  innings    Int
+  battingTeamId String
+  striker    String
+  nonStriker String?
+  bowler     String
+  runs       Int      @default(0) // runs off the bat
+  extraType  String? // WD, NB, B, LB
+  extraRuns  Int      @default(0)
+  wicket     String? // BOWLED, CAUGHT, LBW, RUN_OUT, STUMPED, HIT_WICKET, RETIRED
+  dismissed  String?
+  fielder    String?
+  createdAt  DateTime @default(now())
+
+  @@index([matchId, seq])
+}
+
+model Auction {
+  id           String    @id @default(cuid())
+  leagueId     String    @unique
+  league       League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  status       String    @default("SETUP") // SETUP, LIVE, PAUSED, COMPLETED
+  bidIncrement Int       @default(10000)
+  timerSeconds Int       @default(30)
+  minSquad     Int       @default(11)
+  maxSquad     Int       @default(16)
+  currentRegId String?
+  currentBid   Int?
+  currentTeamId String?
+  endsAt       DateTime?
+  updatedAt    DateTime  @updatedAt
+  bids         AuctionBid[]
+}
+
+model AuctionBid {
+  id        String   @id @default(cuid())
+  auctionId String
+  auction   Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  regId     String
+  teamId    String
+  amount    Int
+  byUserId  String?
+  createdAt DateTime @default(now())
+}
+
+model TrialEvent {
+  id         String   @id @default(cuid())
+  leagueId   String
+  league     League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  title      String
+  city       String?
+  venue      String?
+  date       DateTime
+  capacity   Int      @default(100)
+  inviteOnly Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  entries    TrialEntry[]
+}
+
+model TrialEntry {
+  id          String     @id @default(cuid())
+  trialId     String
+  trial       TrialEvent @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  regId       String
+  code        String     @unique
+  checkedInAt DateTime?
+  batting     Int?
+  bowling     Int?
+  fielding    Int?
+  fitness     Int?
+  total       Int?
+  comments    String?
+  createdAt   DateTime   @default(now())
+
+  @@unique([trialId, regId])
+}
+
+model Hotel {
+  id        String   @id @default(cuid())
+  leagueId  String
+  league    League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  name      String
+  city      String?
+  address   String?
+  contact   String?
+  checkIn   DateTime?
+  checkOut  DateTime?
+  createdAt DateTime @default(now())
+  rooms     RoomAllocation[]
+}
+
+model RoomAllocation {
+  id        String   @id @default(cuid())
+  hotelId   String
+  hotel     Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  roomNo    String?
+  roomType  String   @default("Twin")
+  teamId    String?
+  group     String? // Team name, Officials, Broadcast crew, VIP...
+  occupants String[] @default([])
+  checkIn   DateTime?
+  checkOut  DateTime?
+}
+
+model TravelBooking {
+  id         String   @id @default(cuid())
+  leagueId   String
+  league     League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  mode       String // FLIGHT, TRAIN, BUS, CAR
+  teamId     String?
+  group      String?
+  travellers String[] @default([])
+  fromPlace  String
+  toPlace    String
+  departAt   DateTime
+  arriveAt   DateTime?
+  carrier    String?
+  reference  String? // PNR / booking ref
+  status     String   @default("PLANNED") // PLANNED, BOOKED, CANCELLED
+  cost       Int?
+  createdAt  DateTime @default(now())
+}
+
+model TicketCategory {
+  id        String   @id @default(cuid())
+  leagueId  String
+  league    League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  matchId   String?
+  match     Match?   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  name      String
+  price     Int
+  quantity  Int
+  sold      Int      @default(0)
+  isActive  Boolean  @default(true)
+  orders    TicketOrder[]
+}
+
+model TicketOrder {
+  id          String         @id @default(cuid())
+  categoryId  String
+  category    TicketCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  code        String         @unique
+  buyerName   String
+  email       String
+  phone       String?
+  qty         Int
+  amount      Int
+  status      String         @default("PENDING") // PENDING, PAID, CANCELLED
+  paymentId   String?
+  checkedIn   Int            @default(0)
+  createdAt   DateTime       @default(now())
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String?
+  purpose         String // SUBSCRIPTION, TICKETS
+  refId           String? // subscription id / ticket order id
+  amount          Int // INR (rupees)
+  currency        String   @default("INR")
+  provider        String // RAZORPAY, TEST
+  providerOrderId String?
+  providerPaymentId String?
+  status          String   @default("CREATED") // CREATED, PAID, FAILED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ======================= Accreditation =======================
+
+model AccredConfig {
+  id              String   @id @default(cuid())
+  leagueId        String   @unique
+  league          League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  policy          String // terms & regulations shown to applicants and printed on the card back
+  backText        String
+  sponsorLogoUrl  String?
+  layout          String   @default("PORTRAIT") // PORTRAIT (CR80 54x86mm) / LANDSCAPE
+  showIdLast4     Boolean  @default(false)
+  selfApplyOpen   Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+}
+
+model AccredZone {
+  id          String @id @default(cuid())
+  leagueId    String
+  league      League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  code        String // shown big on the card, e.g. "1", "2", "M"
+  name        String
+  description String?
+  sort        Int    @default(0)
+
+  @@unique([leagueId, code])
+}
+
+model AccredCategory {
+  id             String   @id @default(cuid())
+  leagueId       String
+  league         League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  name           String
+  letter         String // short code printed on the card, e.g. P, TO, MO
+  color          String
+  zones          String[] @default([]) // default zone codes
+  requiresIdCheck Boolean @default(true)
+  selfApply      Boolean  @default(false) // can apply through the public form
+  sort           Int      @default(0)
+  accreditations Accreditation[]
+}
+
+model Accreditation {
+  id           String         @id @default(cuid())
+  leagueId     String
+  league       League         @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  categoryId   String
+  category     AccredCategory @relation(fields: [categoryId], references: [id])
+  cardNo       Int
+  code         String         @unique // QR payload: <code>
+  version      Int            @default(1) // increments on reprint; older cards become invalid
+  name         String
+  organisation String?
+  designation  String?
+  email        String?
+  phone        String?
+  photoUrl     String?
+  idType       String? // Aadhaar, Passport, PAN, Driving licence, Voter ID
+  idLast4      String? // only last 4 digits are stored
+  idVerified   Boolean        @default(false)
+  teamId       String?
+  zones        String[]       @default([])
+  validFrom    DateTime?
+  validTo      DateTime?
+  status       String         @default("APPLIED") // APPLIED, APPROVED, PRINTED, ISSUED, REJECTED, REVOKED
+  source       String         @default("LEAGUE") // LEAGUE, SELF_APPLY, BULK
+  notes        String?
+  printedAt    DateTime?
+  issuedAt     DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  scans        AccredScan[]
+
+  @@unique([leagueId, cardNo])
+}
+
+model AccredScan {
+  id              String        @id @default(cuid())
+  accreditationId String
+  accreditation   Accreditation @relation(fields: [accreditationId], references: [id], onDelete: Cascade)
+  zone            String
+  allowed         Boolean
+  reason          String?
+  byUserId        String?
+  createdAt       DateTime      @default(now())
 }

@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, BookOpenCheck, Building2, ChevronDown, CircleDollarSign, FileText, Handshake, LayoutDashboard, LogOut, Menu,
-  MessageSquare, Search, Settings, Shield, ShieldCheck, Store, Trophy, User as UserIcon, Users, UsersRound, Wallet, X, ScrollText, Megaphone, Presentation, FileSignature,
+  MessageSquare, Search, Settings, Shield, ShieldCheck, Store, Trophy, User as UserIcon, Users, UsersRound, Wallet, X, ScrollText, Megaphone, Presentation, FileSignature, Gavel, CalendarDays, Plane, ClipboardCheck, Ticket, IdCard,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { get, post } from '../lib/api';
@@ -71,8 +71,14 @@ function leagueNav(id: string, league: any, i: (C: any) => ReactNode) {
     { to: `${base}/playbook`, label: 'Execution Playbook', icon: i(BookOpenCheck) },
     { to: `${base}/teams`, label: team ? 'My Team' : 'Teams & Owners', icon: i(Shield) },
     { to: `${base}/players`, label: 'Players', icon: i(UsersRound) },
+    { to: `${base}/auction`, label: 'Live Auction', icon: i(Gavel) },
+    { to: `${base}/fixtures`, label: 'Fixtures & Scoring', icon: i(CalendarDays) },
+    { to: `${base}/logistics`, label: team ? 'Team Itinerary' : 'Travel & Hotels', icon: i(Plane) },
   ];
   if (!team) items.push(
+    { to: `${base}/trials`, label: 'Trials', icon: i(ClipboardCheck) },
+    { to: `${base}/tickets`, label: 'Ticketing', icon: i(Ticket) },
+    { to: `${base}/accreditation`, label: 'Accreditation', icon: i(IdCard) },
     { to: `${base}/management`, label: 'Management Team', icon: i(Users) },
     { to: `${base}/sponsorships`, label: 'Sponsorships', icon: i(Megaphone) },
     { to: `${base}/sponsors`, label: 'Find Sponsors', icon: i(Handshake) },

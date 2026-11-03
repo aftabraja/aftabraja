@@ -286,7 +286,7 @@ export const PLAYBOOK: PlaybookPhase[] = [
         description: 'Schedule trial batches by city, check-in players via QR, record scout evaluations and auto-shortlist by score, role and age.',
         owner: 'Cricket Operations',
         actions: [
-          { type: 'page', label: 'Manage players', route: 'players' },
+          { type: 'page', label: 'Open trials desk', route: 'trials' },
           { type: 'vendor', label: 'Find scouts & selectors', category: 'coaching-staff' },
         ],
       },
@@ -303,7 +303,7 @@ export const PLAYBOOK: PlaybookPhase[] = [
         description: 'Team purse, retention/RTM rules, min/max squad size, role balance rules, bid increments.',
         owner: 'Cricket Operations',
         critical: true,
-        actions: [{ type: 'page', label: 'Configure auction', route: 'players' }],
+        actions: [{ type: 'page', label: 'Configure auction rules', route: 'auction' }],
       },
       {
         key: 'auction-event',
@@ -312,6 +312,7 @@ export const PLAYBOOK: PlaybookPhase[] = [
         owner: 'League Owner',
         critical: true,
         actions: [
+          { type: 'page', label: 'Open live auction room', route: 'auction' },
           { type: 'vendor', label: 'Find auctioneers', category: 'auctioneer' },
           { type: 'vendor', label: 'Find event venues', category: 'event-venue' },
         ],
@@ -388,14 +389,14 @@ export const PLAYBOOK: PlaybookPhase[] = [
         description: 'Group stage, playoffs and final with venue availability, team rest days (min 1 day between games), double headers and broadcast slots.',
         owner: 'Cricket Operations',
         critical: true,
-        actions: [{ type: 'ai', label: 'Auto-generate schedule', tool: 'schedule' }],
+        actions: [{ type: 'page', label: 'Auto-generate schedule', route: 'fixtures' }],
       },
       {
         key: 'publish-schedule',
         title: 'Publish schedule',
         description: 'Announce fixtures to teams, broadcasters, sponsors and fans.',
         owner: 'Marketing',
-        actions: [{ type: 'ai', label: 'Draft announcement', tool: 'press-release' }],
+        actions: [{ type: 'page', label: 'Publish fixtures', route: 'fixtures' }],
       },
     ],
   },
@@ -450,7 +451,10 @@ export const PLAYBOOK: PlaybookPhase[] = [
         title: 'Ticketing',
         description: 'Ticket categories, pricing, promo codes, ticketing partner, box office and QR entry.',
         owner: 'Commercial',
-        actions: [{ type: 'vendor', label: 'Find ticketing partners', category: 'ticketing' }],
+        actions: [
+          { type: 'page', label: 'Set up ticketing', route: 'tickets' },
+          { type: 'vendor', label: 'Find ticketing partners', category: 'ticketing' },
+        ],
       },
       {
         key: 'merchandise',
@@ -516,7 +520,10 @@ export const PLAYBOOK: PlaybookPhase[] = [
         description: 'Team hotels, officials hotel, broadcast crew; rooming lists with check-in/check-out.',
         owner: 'Logistics',
         critical: true,
-        actions: [{ type: 'vendor', label: 'Find hotels', category: 'hotels' }],
+        actions: [
+          { type: 'page', label: 'Hotels & rooming list', route: 'logistics' },
+          { type: 'vendor', label: 'Find hotels', category: 'hotels' },
+        ],
       },
       {
         key: 'travel',
@@ -525,6 +532,7 @@ export const PLAYBOOK: PlaybookPhase[] = [
         owner: 'Logistics',
         critical: true,
         actions: [
+          { type: 'page', label: 'Plan travel', route: 'logistics' },
           { type: 'vendor', label: 'Find travel agents', category: 'travel-agency' },
           { type: 'vendor', label: 'Find bus & cab operators', category: 'ground-transport' },
         ],
@@ -555,9 +563,14 @@ export const PLAYBOOK: PlaybookPhase[] = [
       {
         key: 'accreditation',
         title: 'Accreditation',
-        description: 'Passes for players, staff, officials, media, vendors, VIPs with zone permissions.',
+        description: 'Define access zones and categories, collect applications with photo and ID verification, approve, design and print cards (CR80), issue them, and verify at zone gates. Revoke or reprint lost cards.',
+        tip: 'Close applications 7–10 days before the first match so cards can be verified, printed and distributed with team welcome kits.',
         owner: 'Operations',
-        actions: [{ type: 'vendor', label: 'Find ID card printers', category: 'printing' }],
+        critical: true,
+        actions: [
+          { type: 'page', label: 'Open accreditation', route: 'accreditation' },
+          { type: 'vendor', label: 'Find ID card printers', category: 'printing' },
+        ],
       },
     ],
   },
@@ -619,15 +632,18 @@ export const PLAYBOOK: PlaybookPhase[] = [
         description: 'Ground ready, pitch & markings, stumps, rope, chairs, commentary box, AV, security, medical, water, toss-area branding — "Ready for toss" sign-off.',
         owner: 'Operations',
         critical: true,
-        actions: [{ type: 'page', label: 'Open dashboard', route: '' }],
+        actions: [{ type: 'page', label: 'Open fixtures', route: 'fixtures' }],
       },
       {
         key: 'live-scoring',
         title: 'Live scoring & match centre',
-        description: 'Ball-by-ball scoring, live scorecards, automatic points table and NRR.',
+        description: 'Ball-by-ball scoring, live scorecards, automatic points table and NRR, and a public match centre for fans.',
         owner: 'Cricket Operations',
         critical: true,
-        actions: [{ type: 'vendor', label: 'Find scorers', category: 'scorers' }],
+        actions: [
+          { type: 'page', label: 'Open scoring', route: 'fixtures' },
+          { type: 'vendor', label: 'Find scorers', category: 'scorers' },
+        ],
       },
       {
         key: 'sponsor-deliverables',

@@ -24,6 +24,15 @@ import { DeckEditor, DeckList } from './pages/league/DeckStudio';
 import { ContractEditor, ContractList } from './pages/league/Contracts';
 import { Account, Marketplace, Messages, Notifications } from './pages/Common';
 import { PlayerHome, SponsorHome, SponsorProfile, VendorHome } from './pages/Portals';
+import Fixtures from './pages/league/Fixtures';
+import MatchCenter from './pages/league/MatchCenter';
+import AuctionRoom from './pages/league/Auction';
+import { TrialDesk, TrialsList } from './pages/league/Trials';
+import Logistics from './pages/league/Logistics';
+import Ticketing from './pages/league/Ticketing';
+import Accreditation from './pages/league/Accreditation';
+import AccredApply from './pages/AccredApply';
+import { PublicLeague, PublicMatch, TicketView } from './pages/Public';
 import { AdminAudit, AdminLeagues, AdminOverview, AdminSponsors, AdminTransactions, AdminUsers, AdminVendors } from './pages/admin/Admin';
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -54,6 +63,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
               <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
+              <Route path="/l/:slug" element={<PublicLeague />} />
+              <Route path="/l/:slug/match/:mid" element={<PublicMatch />} />
+              <Route path="/ticket/:code" element={<TicketView />} />
+              <Route path="/accreditation/apply/:slug" element={<AccredApply />} />
               <Route element={<Protected><AppShell /></Protected>}>
                 <Route path="/leagues" element={<Protected roles={LEAGUE_ROLES}><LeaguesPage /></Protected>} />
                 <Route path="/leagues/new" element={<Protected roles={['LEAGUE_OWNER']}><CreateLeague /></Protected>} />
@@ -71,6 +84,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="/leagues/:leagueId/decks/:deckId" element={<DeckEditor />} />
                 <Route path="/leagues/:leagueId/contracts" element={<ContractList />} />
                 <Route path="/leagues/:leagueId/contracts/:contractId" element={<ContractEditor />} />
+                <Route path="/leagues/:leagueId/fixtures" element={<Fixtures />} />
+                <Route path="/leagues/:leagueId/matches/:mid" element={<MatchCenter />} />
+                <Route path="/leagues/:leagueId/auction" element={<AuctionRoom />} />
+                <Route path="/leagues/:leagueId/trials" element={<TrialsList />} />
+                <Route path="/leagues/:leagueId/trials/:tid" element={<TrialDesk />} />
+                <Route path="/leagues/:leagueId/logistics" element={<Logistics />} />
+                <Route path="/leagues/:leagueId/tickets" element={<Ticketing />} />
+                <Route path="/leagues/:leagueId/accreditation" element={<Accreditation />} />
                 <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/messages/:cid" element={<Messages />} />
