@@ -1107,3 +1107,64 @@ model SponsorDeliverable {
   notes      String?
   updatedAt  DateTime    @updatedAt
 }
+
+// ======================= Marketing & PR =======================
+
+model ContentPost {
+  id            String    @id @default(cuid())
+  leagueId      String
+  title         String
+  type          String    @default("OTHER") // MATCH_PROMO, RESULT, TEAM_REVEAL, PLAYER_STORY, SPONSOR_SHOUTOUT, CONTEST, ANNOUNCEMENT, OTHER
+  channels      String[]  @default([])
+  scheduledAt   DateTime
+  caption       String?
+  assets        String[]  @default([])
+  status        String    @default("DRAFT") // IDEA, DRAFT, IN_REVIEW, APPROVED, PUBLISHED
+  assigneeId    String?
+  assigneeName  String?
+  matchId       String?
+  deliverableId String? // counts toward a sponsor deliverable when published
+  publishedUrl  String?
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model MediaAsset {
+  id         String   @id @default(cuid())
+  leagueId   String
+  title      String
+  url        String
+  kind       String   @default("IMAGE") // IMAGE, VIDEO, DOCUMENT, LOGO
+  tags       String[] @default([])
+  uploadedBy String
+  createdAt  DateTime @default(now())
+}
+
+model MediaContact {
+  id        String   @id @default(cuid())
+  leagueId  String
+  name      String
+  outlet    String
+  kind      String   @default("Digital") // Print, TV, Digital, Radio, Agency, Influencer
+  beat      String?
+  email     String?
+  phone     String?
+  city      String?
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+model PressRelease {
+  id         String    @id @default(cuid())
+  leagueId   String
+  title      String
+  body       String
+  status     String    @default("DRAFT") // DRAFT, APPROVED, SENT
+  approvedBy String?
+  sentAt     DateTime?
+  sentTo     Int       @default(0)
+  coverage   Json      @default("[]") // [{ outlet, url, date }]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}

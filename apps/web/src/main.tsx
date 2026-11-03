@@ -37,6 +37,7 @@ import Reports from './pages/league/Reports';
 import Procurement, { RfqDetail, WorkOrderDetail } from './pages/league/Procurement';
 import { JerseyEditor, JerseyList } from './pages/league/Jerseys';
 import Crm, { SponsorDeals } from './pages/league/Crm';
+import Marketing from './pages/league/Marketing';
 import TalentMarket from './pages/Talent';
 import AgentHome from './pages/Agent';
 import AccredApply from './pages/AccredApply';
@@ -109,6 +110,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="/leagues/:leagueId/procurement" element={<Procurement />} />
                 <Route path="/leagues/:leagueId/jerseys" element={<JerseyList />} />
                 <Route path="/leagues/:leagueId/crm" element={<Crm />} />
+                <Route path="/leagues/:leagueId/marketing" element={<Marketing />} />
                 <Route path="/sponsor/deals" element={<Protected roles={['SPONSOR']}><SponsorDeals /></Protected>} />
                 <Route path="/leagues/:leagueId/jerseys/:jid" element={<JerseyEditor />} />
                 <Route path="/leagues/:leagueId/procurement/rfqs/:rid" element={<RfqDetail />} />

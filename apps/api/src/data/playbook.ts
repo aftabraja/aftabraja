@@ -601,6 +601,7 @@ export const PLAYBOOK: PlaybookPhase[] = [
         description: 'Content calendar: team reveals, player stories, match promos, sponsor shout-outs, contests.',
         owner: 'Marketing',
         actions: [
+          { type: 'page', label: 'Open content calendar', route: 'marketing' },
           { type: 'vendor', label: 'Find digital agencies', category: 'digital-marketing' },
           { type: 'vendor', label: 'Find photographers', category: 'photography-video' },
         ],
@@ -611,7 +612,7 @@ export const PLAYBOOK: PlaybookPhase[] = [
         description: 'Press releases, media accreditation, interviews, coverage tracking.',
         owner: 'Marketing',
         actions: [
-          { type: 'ai', label: 'Draft press release', tool: 'press-release' },
+          { type: 'page', label: 'Draft press release', route: 'marketing' },
           { type: 'vendor', label: 'Find PR agencies', category: 'pr-agency' },
         ],
       },

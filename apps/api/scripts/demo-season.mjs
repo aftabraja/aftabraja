@@ -289,4 +289,24 @@ const lostDeal = await req(`${P}/crm/deals`, { company: 'ByteLearn EdTech', oppo
 await req(`${P}/crm/deals/${lostDeal.id}`, { stage: 'LOST', lostReason: 'Budget' }, T, 'PATCH');
 const crm1 = await req(`${P}/crm`, null, T);
 console.log('crm: pipeline', crm1.summary.pipeline, 'won', crm1.summary.won, 'win rate', crm1.summary.winRate + '%');
+
+// ---- Marketing & PR ----
+const planned = await req(`${P}/marketing/posts/plan-matches`, { count: 4 }, T);
+const deliverables = await req(`${P}/crm/deliverables`, null, T);
+const social = deliverables.flatMap((x) => x.deliverables).find((x) => /social posts/.test(x.title));
+const before = social.delivered;
+const post1 = await req(`${P}/marketing/posts`, { title: 'Velocity Motors: Six of the match', type: 'SPONSOR_SHOUTOUT', channels: ['INSTAGRAM'], scheduledAt: days(1), caption: 'Biggest six of the night, powered by Velocity Motors!', assets: [face('Six', 120)], deliverableId: social.id }, T);
+await req(`${P}/marketing/posts/${post1.id}`, { status: 'IN_REVIEW' }, OPS, 'PATCH');
+await req(`${P}/marketing/posts/${post1.id}`, { status: 'APPROVED' }, T, 'PATCH');
+await req(`${P}/marketing/posts/${post1.id}`, { status: 'PUBLISHED', publishedUrl: 'https://instagram.com/p/demo123' }, T, 'PATCH');
+const after = (await req(`${P}/crm/deliverables`, null, T)).flatMap((x) => x.deliverables).find((x) => x.id === social.id);
+assert(after.delivered === before + 1, 'published sponsor post counts toward deliverable');
+await req(`${P}/marketing/assets`, { items: [{ title: 'Match 5 poster', url: face('Poster', 300), kind: 'IMAGE' }, { title: 'CLT10 logo pack', url: face('Logo', 220), kind: 'LOGO' }], tags: ['match-5', 'poster', 'clt10'] }, T);
+await req(`${P}/marketing/contacts/import`, { text: 'Ritika Rao, Mumbai Sports Daily, ritika@example.com, 9800000001, Print, Mumbai\nAnand Pillai, CricWire Digital, anand@example.com, 9800000002, Digital, Bengaluru\nSports Tonight, Channel 9 News, desk@example.com, , TV, Mumbai' }, T);
+const pr = await req(`${P}/marketing/releases`, { template: 'standings' }, T);
+await req(`${P}/marketing/releases/${pr.id}`, { status: 'APPROVED' }, T, 'PATCH');
+const mc = await req(`${P}/marketing/contacts`, null, T);
+const sentPr = await req(`${P}/marketing/releases/${pr.id}/send`, { contactIds: mc.map((c) => c.id) }, T);
+await req(`${P}/marketing/releases/${pr.id}`, { addCoverage: { outlet: 'Mumbai Sports Daily', url: 'https://example.com/clt10-table' } }, T, 'PATCH');
+console.log('marketing: planned', planned.created, 'match posts, press release sent to', sentPr.sent);
 console.log('DEMO SEASON OK');
