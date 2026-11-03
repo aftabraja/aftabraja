@@ -321,9 +321,10 @@ export const REPORTS: ReportDef[] = [
     description: 'Status of all 66 steps by phase, owner and criticality.',
     run: async (id) => {
       const prog = await prisma.leagueStepProgress.findMany({ where: { leagueId: id } });
-      const rows = PLAYBOOK.flatMap((p, i) => p.steps.map((s) => { const r = prog.find((x) => x.stepKey === s.key); return { phase: `${i + 1}. ${p.title}`, step: s.title, owner: s.owner, critical: s.critical ? 'Yes' : '', status: (r?.status ?? 'NOT_STARTED').replace('_', ' '), notes: r?.notes ?? '', updated: r?.updatedAt ?? null }; }));
+      const users = await prisma.user.findMany({ where: { id: { in: prog.map((x) => x.assigneeId).filter(Boolean) as string[] } }, select: { id: true, name: true } });
+      const rows = PLAYBOOK.flatMap((p, i) => p.steps.map((s) => { const r = prog.find((x) => x.stepKey === s.key); return { phase: `${i + 1}. ${p.title}`, step: s.title, owner: s.owner, assignee: users.find((u) => u.id === r?.assigneeId)?.name ?? '', dueDate: r?.dueDate ?? null, critical: s.critical ? 'Yes' : '', status: (r?.status ?? 'NOT_STARTED').replace('_', ' '), notes: r?.notes ?? '', updated: r?.updatedAt ?? null }; }));
       const done = prog.filter((x) => x.status === 'DONE' || x.status === 'SKIPPED').length;
-      return { columns: [{ key: 'phase', label: 'Phase', width: 30 }, { key: 'step', label: 'Step', width: 34 }, { key: 'owner', label: 'Owner', width: 18 }, { key: 'critical', label: 'Critical' }, { key: 'status', label: 'Status' }, { key: 'updated', label: 'Updated', type: 'date' }, { key: 'notes', label: 'Notes', width: 30 }], rows, summary: [{ label: 'Complete', value: `${Math.round((done / ALL_STEPS.length) * 100)}%` }, { label: 'Steps done', value: `${done}/${ALL_STEPS.length}` }] };
+      return { columns: [{ key: 'phase', label: 'Phase', width: 30 }, { key: 'step', label: 'Step', width: 34 }, { key: 'owner', label: 'Function', width: 18 }, { key: 'assignee', label: 'Owner', width: 18 }, { key: 'dueDate', label: 'Due', type: 'date' }, { key: 'critical', label: 'Critical' }, { key: 'status', label: 'Status' }, { key: 'updated', label: 'Updated', type: 'date' }, { key: 'notes', label: 'Notes', width: 30 }], rows, summary: [{ label: 'Complete', value: `${Math.round((done / ALL_STEPS.length) * 100)}%` }, { label: 'Steps done', value: `${done}/${ALL_STEPS.length}` }] };
     },
   },
   {
@@ -378,6 +379,26 @@ export const REPORTS: ReportDef[] = [
       const tn = await teamName(id);
       return { columns: [{ key: 'departAt', label: 'Departs', type: 'datetime' }, { key: 'mode', label: 'Mode' }, { key: 'route', label: 'Route', width: 26 }, { key: 'group', label: 'Team / group', width: 22 }, { key: 'carrier', label: 'Carrier' }, { key: 'reference', label: 'PNR / ref' }, { key: 'pax', label: 'Pax', type: 'number', total: true }, { key: 'cost', label: 'Cost', type: 'money', total: true }, { key: 'status', label: 'Status' }, { key: 'travellers', label: 'Travellers', width: 40 }],
         rows: t.map((x) => ({ ...x, route: `${x.fromPlace} → ${x.toPlace}`, group: tn(x.teamId) || x.group || '', pax: x.travellers.length, travellers: x.travellers.join(', ') })) };
+    },
+  },
+  {
+    key: 'broadcast-schedule', title: 'Broadcast Schedule (TV slots)', group: 'Operations',
+    description: 'Every match with broadcaster, slot, on-air window and stream link — for TV / OTT partners.',
+    run: async (id) => {
+      const ms = await prisma.match.findMany({ where: { leagueId: id }, orderBy: [{ startsAt: 'asc' }, { number: 'asc' }], include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } }, venue: { select: { name: true } } } });
+      return { columns: [{ key: 'number', label: '#', type: 'number' }, { key: 'fixture', label: 'Fixture', width: 34 }, { key: 'venue', label: 'Venue', width: 20 }, { key: 'startsAt', label: 'First ball', type: 'datetime' }, { key: 'broadcaster', label: 'Broadcaster', width: 18 }, { key: 'tvSlot', label: 'Slot' }, { key: 'onAirAt', label: 'On air', type: 'datetime' }, { key: 'offAirAt', label: 'Off air', type: 'datetime' }, { key: 'streamUrl', label: 'Stream', width: 30 }],
+        rows: ms.map((m) => ({ ...m, fixture: `${m.homeTeam?.name ?? m.homeLabel ?? 'TBD'} vs ${m.awayTeam?.name ?? m.awayLabel ?? 'TBD'}`, venue: m.venue?.name ?? '' })) };
+    },
+  },
+  {
+    key: 'matchday-readiness', title: 'Match-day Readiness', group: 'Operations',
+    description: 'Checklist completion per match: done, open critical checks and overdue items.',
+    run: async (id) => {
+      const ms = await prisma.match.findMany({ where: { leagueId: id }, orderBy: [{ startsAt: 'asc' }, { number: 'asc' }], include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } }, checklist: true } });
+      const now = new Date();
+      return { columns: [{ key: 'number', label: '#', type: 'number' }, { key: 'fixture', label: 'Fixture', width: 34 }, { key: 'startsAt', label: 'Starts', type: 'datetime' }, { key: 'status', label: 'Status' }, { key: 'done', label: 'Done', type: 'number' }, { key: 'total', label: 'Checks', type: 'number' }, { key: 'criticalOpen', label: 'Critical open', type: 'number', total: true }, { key: 'overdue', label: 'Overdue', type: 'number', total: true }],
+        rows: ms.map((m) => ({ number: m.number, startsAt: m.startsAt, status: m.status, fixture: `${m.homeTeam?.name ?? m.homeLabel ?? 'TBD'} vs ${m.awayTeam?.name ?? m.awayLabel ?? 'TBD'}`, total: m.checklist.length, done: m.checklist.filter((c) => c.done).length, criticalOpen: m.checklist.filter((c) => c.critical && !c.done).length, overdue: m.checklist.filter((c) => !c.done && c.dueAt && c.dueAt < now).length })),
+        notes: ['Checklists are created when a match is first opened in Match-day Ops.'] };
     },
   },
   {

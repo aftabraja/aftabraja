@@ -175,6 +175,9 @@ model LeagueStepProgress {
   league      League     @relation(fields: [leagueId], references: [id], onDelete: Cascade)
   stepKey     String
   status      StepStatus @default(NOT_STARTED)
+  assigneeId  String?    // milestone owner (league owner or a staff member)
+  dueDate     DateTime?
+  alertLevel  String?    // last deadline alert sent: DUE_SOON, OVERDUE
   notes       String?
   attachments String[]   @default([])
   updatedAt   DateTime   @updatedAt
@@ -521,9 +524,15 @@ model Match {
   winnerTeamId  String?
   resultText    String?
   isPublished   Boolean   @default(false)
+  broadcaster   String?   // TV / OTT partner carrying the match
+  tvSlot        String?   // e.g. "Prime time"
+  onAirAt       DateTime? // broadcast window start (pre-show)
+  offAirAt      DateTime?
+  streamUrl     String?
   createdAt     DateTime  @default(now())
 
   balls        Ball[]
+  checklist    MatchChecklistItem[]
   ticketCategories TicketCategory[]
 }
 
@@ -1274,4 +1283,21 @@ model PlayerDocument {
   note       String?
   reviewedBy String?
   createdAt  DateTime @default(now())
+}
+
+model MatchChecklistItem {
+  id         String    @id @default(cuid())
+  matchId    String
+  match      Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  phase      String    // T-7, T-2, T-1, MATCH_DAY, POST
+  title      String
+  department String    // responsible function
+  critical   Boolean   @default(false) // must be done before the toss
+  dueAt      DateTime?
+  done       Boolean   @default(false)
+  doneBy     String?
+  doneAt     DateTime?
+  note       String?
+  sort       Int       @default(0)
+  alerted    Boolean   @default(false)
 }

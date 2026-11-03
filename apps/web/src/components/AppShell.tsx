@@ -95,6 +95,7 @@ function leagueNav(id: string, league: any, i: (C: any) => ReactNode): { title?:
       { to: `${base}/trials`, label: 'Trials', icon: i(ClipboardCheck) },
       { to: `${base}/auction`, label: 'Live Auction', icon: i(Gavel) },
       { to: `${base}/fixtures`, label: 'Fixtures & Scoring', icon: i(CalendarDays) },
+      { to: `${base}/matchday`, label: 'Match-day Ops', icon: i(ClipboardCheck) },
       { to: `${base}/logistics`, label: 'Travel & Hotels', icon: i(Plane) },
       { to: `${base}/jerseys`, label: 'Jersey Studio', icon: i(Shirt) },
       { to: `${base}/accreditation`, label: 'Accreditation', icon: i(IdCard) },

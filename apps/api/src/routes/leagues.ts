@@ -139,14 +139,22 @@ r.get('/:id/dashboard', ah(async (req, res) => {
 }));
 
 // ---------- Playbook ----------
+/** People a milestone can be assigned to: the league owner and staff members */
+async function assignable(leagueId: string) {
+  const l = await prisma.league.findUniqueOrThrow({ where: { id: leagueId }, select: { owner: { select: { id: true, name: true } }, members: { select: { department: true, user: { select: { id: true, name: true } } } } } });
+  return [{ id: l.owner.id, name: l.owner.name, department: 'League Owner' }, ...l.members.map((m) => ({ id: m.user.id, name: m.user.name, department: m.department }))];
+}
 r.get('/:id/playbook', ah(async (req, res) => {
   await assertLeague(me(req), req.params.id);
   const rows = await prisma.leagueStepProgress.findMany({ where: { leagueId: req.params.id } });
   const byKey = new Map(rows.map((r) => [r.stepKey, r]));
+  const people = await assignable(req.params.id);
+  const nameOf = (id?: string | null) => people.find((p) => p.id === id)?.name ?? null;
   res.json({
     progress: await leagueProgress(req.params.id),
+    people,
     phases: PLAYBOOK.map((p) => {
-      const steps = p.steps.map((s) => ({ ...s, status: byKey.get(s.key)?.status ?? 'NOT_STARTED', notes: byKey.get(s.key)?.notes ?? null, attachments: byKey.get(s.key)?.attachments ?? [] }));
+      const steps = p.steps.map((s) => { const row = byKey.get(s.key); return { ...s, status: row?.status ?? 'NOT_STARTED', notes: row?.notes ?? null, attachments: row?.attachments ?? [], assigneeId: row?.assigneeId ?? null, assigneeName: nameOf(row?.assigneeId), dueDate: row?.dueDate ?? null }; });
       return { ...p, steps, done: steps.filter((s) => s.status === 'DONE' || s.status === 'SKIPPED').length };
     }),
   });
@@ -160,14 +168,20 @@ r.patch('/:id/playbook/:stepKey', ah(async (req, res) => {
     status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'DONE', 'SKIPPED']).optional(),
     notes: z.string().optional().nullable(),
     attachment: z.string().optional(), // data URL or link
+    assigneeId: z.string().nullable().optional(), dueDate: z.coerce.date().nullable().optional(),
   }).parse(req.body);
+  if (d.assigneeId && !(await assignable(id)).some((p) => p.id === d.assigneeId)) throw new HttpError(400, 'Assign the milestone to the league owner or a staff member');
   const existing = await prisma.leagueStepProgress.findUnique({ where: { leagueId_stepKey: { leagueId: id, stepKey } } });
   const attachments = [...(existing?.attachments ?? []), ...(d.attachment ? [d.attachment] : [])];
   const row = await prisma.leagueStepProgress.upsert({
     where: { leagueId_stepKey: { leagueId: id, stepKey } },
-    update: { status: d.status, notes: d.notes, attachments },
-    create: { leagueId: id, stepKey, status: d.status ?? 'IN_PROGRESS', notes: d.notes, attachments },
+    update: { status: d.status, notes: d.notes, attachments, assigneeId: d.assigneeId, dueDate: d.dueDate, ...((d.dueDate !== undefined || d.assigneeId !== undefined) && { alertLevel: null }) },
+    create: { leagueId: id, stepKey, status: d.status ?? (d.assigneeId || d.dueDate ? 'NOT_STARTED' : 'IN_PROGRESS'), notes: d.notes, attachments, assigneeId: d.assigneeId, dueDate: d.dueDate },
   });
+  if (d.assigneeId && d.assigneeId !== existing?.assigneeId && d.assigneeId !== me(req).id) {
+    const step = ALL_STEPS.find((s) => s.key === stepKey)!;
+    await notify(d.assigneeId, `You own a milestone: ${step.title}`, { body: row.dueDate ? `Due ${row.dueDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : undefined, link: `/leagues/${id}/playbook#${stepKey}` });
+  }
   if (d.status === 'DONE') {
     const step = ALL_STEPS.find((s) => s.key === stepKey)!;
     await notify(await leagueManagers(id), `Step completed: ${step.title}`, { link: `/leagues/${id}/playbook`, type: 'success' });

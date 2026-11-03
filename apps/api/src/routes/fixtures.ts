@@ -10,6 +10,7 @@ import { publish } from '../lib/realtime.js';
 import { standings } from '../lib/standings.js';
 import { computeResult, matchView, teamSel } from '../lib/matchView.js';
 import { roundRobin } from '../lib/schedule.js';
+import { checklistFor } from '../lib/matchday.js';
 
 /** Venues, fixtures, auto-scheduler, playoffs, standings and ball-by-ball scoring. Mounted at /api/leagues/:leagueId */
 const r = Router({ mergeParams: true });
@@ -49,7 +50,15 @@ r.post('/matches', ah(async (req, res) => {
 
 r.patch('/matches/:mid', ah(async (req, res) => {
   await assertLeague(me(req), req.params.leagueId, 'staff');
-  const m = await prisma.match.update({ where: { id: req.params.mid, leagueId: req.params.leagueId }, data: matchSchema.parse(req.body) });
+  const d = matchSchema.parse(req.body);
+  const before = await prisma.match.findFirst({ where: { id: req.params.mid, leagueId: req.params.leagueId }, select: { startsAt: true } });
+  const m = await prisma.match.update({ where: { id: req.params.mid, leagueId: req.params.leagueId }, data: d });
+  // Rescheduled: move open template checklist items with the match
+  if (d.startsAt !== undefined && m.startsAt && +(before?.startsAt ?? 0) !== +m.startsAt) {
+    const plan = checklistFor(m.startsAt);
+    const items = await prisma.matchChecklistItem.findMany({ where: { matchId: m.id, done: false, sort: { lt: plan.length } } });
+    for (const it of items) await prisma.matchChecklistItem.update({ where: { id: it.id }, data: { dueAt: plan[it.sort].dueAt, alerted: false } });
+  }
   publish(`match:${m.id}`);
   res.json(m);
 }));
@@ -196,8 +205,16 @@ r.post('/matches/:mid/start', ah(async (req, res) => {
     tossWinnerId: z.string(), tossDecision: z.enum(['BAT', 'BOWL']),
     homeXI: z.array(z.string().min(1)).min(2).max(15), awayXI: z.array(z.string().min(1)).min(2).max(15),
     oversPerSide: z.coerce.number().int().min(1).max(50).optional(),
+    overrideChecklist: z.string().min(10).optional(), // reason, league admins only
   }).parse(req.body);
   if (![m.homeTeamId, m.awayTeamId].includes(d.tossWinnerId)) throw new HttpError(400, 'Toss winner must be one of the teams');
+  const open = await prisma.matchChecklistItem.findMany({ where: { matchId: m.id, critical: true, done: false }, select: { title: true } });
+  if (open.length) {
+    if (!d.overrideChecklist) throw new HttpError(400, `Complete the critical match-day checks first: ${open.map((o) => o.title).join('; ')}`);
+    await assertLeague(me(req), req.params.leagueId, 'admin');
+    await audit(me(req).id, 'start-match-override-checklist', 'Match', m.id, { reason: d.overrideChecklist, open: open.map((o) => o.title) });
+  }
+  delete d.overrideChecklist;
   await prisma.match.update({ where: { id: m.id }, data: { ...d, status: 'LIVE', currentInnings: 1 } });
   publish(`match:${m.id}`);
   res.json(await matchView(m.id));

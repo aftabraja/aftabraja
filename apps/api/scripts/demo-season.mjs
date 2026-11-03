@@ -141,6 +141,20 @@ const sch = await req(`${P}/schedule/generate`, { startDate: start, times: ['16:
 await req(`${P}/matches/publish`, {}, T);
 const matches = await req(`${P}/matches`, null, T);
 console.log('fixtures:', sch.created);
+// Broadcast: evening games on StreamPlay OTT, afternoon on a regional channel
+const lateHour = Math.max(...matches.filter((m) => m.startsAt).map((m) => new Date(m.startsAt).getUTCHours()));
+const evening = matches.filter((m) => !m.startsAt || new Date(m.startsAt).getUTCHours() === lateHour);
+await req(`${P}/matchday/broadcast/bulk`, { matchIds: evening.map((m) => m.id), broadcaster: 'StreamPlay OTT', tvSlot: 'Prime time', preShowMinutes: 30, durationHours: 3 }, T);
+await req(`${P}/matchday/broadcast/bulk`, { matchIds: matches.filter((m) => !evening.includes(m)).map((m) => m.id), broadcaster: 'Sports Tonight (Channel 9)', tvSlot: 'Afternoon', preShowMinutes: 15, durationHours: 3 }, T);
+const bc = await req(`${P}/matchday/broadcast`, null, T);
+assert(bc.matches.every((m) => m.broadcaster) && bc.clashes === 0, 'every match has a broadcaster and no clashes');
+// Milestones: owners + due dates on open playbook steps (one overdue)
+const pb = await req(`${P}/playbook`, null, T);
+const opsUser = pb.people.find((x) => x.department === 'Operations');
+const openSteps = pb.phases.flatMap((x) => x.steps).filter((x) => !['DONE', 'SKIPPED'].includes(x.status)).slice(0, 6);
+for (const [i, st] of openSteps.entries()) await req(`${P}/playbook/${st.key}`, { assigneeId: i % 2 ? opsUser.id : pb.people[0].id, dueDate: days(i === 0 ? -2 : i * 4) }, T, 'PATCH');
+const badOwner = await req(`${P}/playbook/${openSteps[0].key}`, { assigneeId: 'not-a-member' }, T, 'PATCH').then(() => true, () => false);
+assert(!badOwner, 'milestones can only be assigned to league people');
 
 // ---- Score 3 matches fully + one live ----
 async function playInnings(m, xiBat, xiBowl, upto) {
@@ -172,7 +186,15 @@ const league = matches.filter((m) => m.stage === 'League');
 for (const [i, m] of league.slice(0, 4).entries()) {
   const homeXI = await sq(m.homeTeamId, m.homeTeam.shortName ?? 'H');
   const awayXI = await sq(m.awayTeamId, m.awayTeam.shortName ?? 'A');
-  await req(`${P}/matches/${m.id}/start`, { tossWinnerId: m.homeTeamId, tossDecision: i % 2 ? 'BOWL' : 'BAT', homeXI, awayXI, oversPerSide: 5 }, T);
+  const toss = { tossWinnerId: m.homeTeamId, tossDecision: i % 2 ? 'BOWL' : 'BAT', homeXI, awayXI, oversPerSide: 5 };
+  // Match-day run sheet: critical checks gate the toss
+  const cl = await req(`${P}/matchday/checklist/${m.id}`, null, OPS0());
+  if (i === 0) {
+    const gated = await req(`${P}/matches/${m.id}/start`, toss, T).then(() => true, () => false);
+    assert(!gated, 'open critical checks block the toss');
+  }
+  for (const it of cl.items.filter((x) => x.critical || x.phase !== 'POST' && rnd() < 0.8)) await req(`${P}/matchday/checklist/items/${it.id}`, { done: true }, OPS0(), 'PATCH');
+  await req(`${P}/matches/${m.id}/start`, toss, T);
   const v0 = await req(`${P}/matches/${m.id}`, null, T);
   const firstBat = v0.battingFirst === m.homeTeamId ? [homeXI, awayXI] : [awayXI, homeXI];
   if (i === 3) { await playInnings(m, firstBat[0], firstBat[1], 17); break; }

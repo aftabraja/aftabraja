@@ -27,6 +27,7 @@ import { ContractEditor, ContractList } from './pages/league/Contracts';
 import { Account, Marketplace, Messages, Notifications } from './pages/Common';
 import { PlayerHome, SponsorHome, SponsorProfile, VendorHome } from './pages/Portals';
 import Fixtures from './pages/league/Fixtures';
+import MatchDay from './pages/league/MatchDay';
 import MatchCenter from './pages/league/MatchCenter';
 import AuctionRoom from './pages/league/Auction';
 import { TrialDesk, TrialsList } from './pages/league/Trials';
@@ -99,6 +100,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="/leagues/:leagueId/contracts" element={<ContractList />} />
                 <Route path="/leagues/:leagueId/contracts/:contractId" element={<ContractEditor />} />
                 <Route path="/leagues/:leagueId/fixtures" element={<Fixtures />} />
+                <Route path="/leagues/:leagueId/matchday" element={<MatchDay />} />
                 <Route path="/leagues/:leagueId/matches/:mid" element={<MatchCenter />} />
                 <Route path="/leagues/:leagueId/auction" element={<AuctionRoom />} />
                 <Route path="/leagues/:leagueId/trials" element={<TrialsList />} />

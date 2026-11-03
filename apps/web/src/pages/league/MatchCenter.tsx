@@ -5,7 +5,7 @@ import { ArrowLeftRight, Flag, RotateCcw, Trophy } from 'lucide-react';
 import { del, get, post } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
 import { useLive } from '../../lib/live';
-import { Button, Card, ErrorText, Field, Modal, PageHeader, Select, Spinner, Textarea, cx } from '../../components/ui';
+import { Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Textarea, cx } from '../../components/ui';
 import { BallChip, InningsCard, ScoreHeader } from '../../components/Scorecard';
 
 export default function MatchCenter() {
@@ -57,11 +57,20 @@ function XIPicker({ label, squad, value, onChange }: { label: string; squad: str
 
 function StartMatch({ d, leagueId, onDone }: { d: any; leagueId: string; onDone: (v: any) => void }) {
   const [f, setF] = useState({ tossWinnerId: d.homeTeamId, tossDecision: 'BAT', oversPerSide: d.oversPerSide ?? 20, homeXI: (d.homeXI.length ? d.homeXI : d.squads.home.slice(0, 11)) as string[], awayXI: (d.awayXI.length ? d.awayXI : d.squads.away.slice(0, 11)) as string[] });
-  const start = useMutation({ mutationFn: () => post(`/leagues/${leagueId}/matches/${d.id}/start`, f), onSuccess: onDone });
+  const { isAdmin } = useLeague();
+  const [override, setOverride] = useState('');
+  const start = useMutation({ mutationFn: () => post(`/leagues/${leagueId}/matches/${d.id}/start`, { ...f, ...(override.length >= 10 && { overrideChecklist: override }) }), onSuccess: onDone });
+  const blocked = /critical match-day checks/.test((start.error as Error | null)?.message ?? '');
   return (
     <Card title="Toss & playing XI">
       <div className="space-y-4">
         <ErrorText error={start.error} />
+        {blocked && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+            <Link to={`/leagues/${leagueId}/matchday?match=${d.id}`} className="font-semibold underline">Open the match-day checklist</Link> to complete the safety checks.
+            {isAdmin && <div className="mt-2"><p className="text-xs">League admin override (recorded in the audit log):</p><Input className="mt-1" placeholder="Reason, e.g. ambulance confirmed by phone, crew arriving 10 min late" value={override} onChange={(e) => setOverride(e.target.value)} /></div>}
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Toss won by"><Select value={f.tossWinnerId} onChange={(e) => setF({ ...f, tossWinnerId: e.target.value })} options={[{ value: d.homeTeamId, label: d.homeTeam.name }, { value: d.awayTeamId, label: d.awayTeam.name }]} /></Field>
           <Field label="Elected to"><Select value={f.tossDecision} onChange={(e) => setF({ ...f, tossDecision: e.target.value })} options={[{ value: 'BAT', label: 'Bat first' }, { value: 'BOWL', label: 'Bowl first' }]} /></Field>

@@ -4,6 +4,7 @@ import { Check, ChevronDown, Circle, CircleDot, ExternalLink, Lightbulb, Papercl
 import { Link } from 'react-router-dom';
 import { get, patch } from '../../lib/api';
 import { useLeague } from '../../lib/hooks';
+import { useAuth } from '../../lib/auth';
 import { fileToDataUrl } from '../../lib/format';
 import { Badge, Button, Card, PageHeader, Progress, Spinner, StatusBadge, Textarea, cx } from '../../components/ui';
 import { useVendorPanel } from '../../components/VendorPanel';
@@ -17,7 +18,8 @@ export default function Playbook() {
   const [openPhase, setOpenPhase] = useState<string | null>(null);
   const [openStep, setOpenStep] = useState<string | null>(null);
   const [aiLogo, setAiLogo] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'critical'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'critical' | 'mine' | 'overdue'>('all');
+  const { user } = useAuth();
 
   const refresh = () => { qc.invalidateQueries({ queryKey: ['playbook', leagueId] }); qc.invalidateQueries({ queryKey: ['league', leagueId] }); qc.invalidateQueries({ queryKey: ['dashboard', leagueId] }); };
   const update = useMutation({ mutationFn: ({ key, ...body }: any) => patch(`/leagues/${leagueId}/playbook/${key}`, body), onSuccess: refresh });
@@ -33,7 +35,11 @@ export default function Playbook() {
   }, [pb.data, openPhase]);
 
   if (pb.isLoading || !league) return <Spinner />;
-  const { progress, phases } = pb.data;
+  const { progress, phases, people } = pb.data;
+  const isOverdue = (s: any) => s.dueDate && !['DONE', 'SKIPPED'].includes(s.status) && new Date(s.dueDate) < new Date();
+  const allSteps = phases.flatMap((p: any) => p.steps);
+  const overdueCount = allSteps.filter(isOverdue).length;
+  const upcoming = allSteps.filter((s: any) => s.dueDate && !['DONE', 'SKIPPED'].includes(s.status)).sort((a: any, b: any) => +new Date(a.dueDate) - +new Date(b.dueDate)).slice(0, 5);
 
   const runAction = (a: any, step: any) => {
     if (a.type === 'vendor') openVendors(a.category, leagueId);
@@ -50,10 +56,15 @@ export default function Playbook() {
           <div>
             <div className="mb-2 flex items-end justify-between"><span className="text-sm font-semibold">Overall progress</span><span className="text-2xl font-extrabold text-brand-700">{progress.percent}%</span></div>
             <Progress value={progress.percent} className="h-3" />
-            <p className="mt-2 text-xs text-ink-500">{progress.done} of {progress.total} steps done · {progress.criticalDone} of {progress.criticalTotal} critical steps</p>
+            <p className="mt-2 text-xs text-ink-500">{progress.done} of {progress.total} steps done · {progress.criticalDone} of {progress.criticalTotal} critical steps{overdueCount > 0 && <span className="font-semibold text-red-600"> · {overdueCount} milestone{overdueCount > 1 ? 's' : ''} overdue</span>}</p>
+            {upcoming.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {upcoming.map((s: any) => <a key={s.key} href={`#${s.key}`} onClick={() => { const ph = phases.find((p: any) => p.steps.some((x: any) => x.key === s.key)); setOpenPhase(ph.key); setOpenStep(s.key); setTimeout(() => document.getElementById(s.key)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100); }} className={cx('rounded-lg border px-2.5 py-1 text-xs hover:bg-ink-50', isOverdue(s) ? 'border-red-300 text-red-700' : 'border-ink-200 text-ink-700')}>{s.title} · {new Date(s.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}{s.assigneeName ? ` · ${s.assigneeName.split(' ')[0]}` : ''}</a>)}
+              </div>
+            )}
           </div>
           <div className="flex gap-1 rounded-lg bg-ink-100 p-1 text-xs font-semibold">
-            {(['all', 'pending', 'critical'] as const).map((f) => <button key={f} onClick={() => setFilter(f)} className={cx('rounded-md px-3 py-1.5 capitalize', filter === f ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500')}>{f}</button>)}
+            {(['all', 'pending', 'critical', 'mine', 'overdue'] as const).map((f) => <button key={f} onClick={() => setFilter(f)} className={cx('rounded-md px-3 py-1.5 capitalize', filter === f ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500')}>{f}</button>)}
           </div>
         </div>
       </Card>
@@ -62,7 +73,7 @@ export default function Playbook() {
         {phases.map((p: any, pi: number) => {
           const isOpen = openPhase === p.key;
           const complete = p.done === p.steps.length;
-          const steps = p.steps.filter((s: any) => filter === 'all' || (filter === 'pending' ? !['DONE', 'SKIPPED'].includes(s.status) : s.critical));
+          const steps = p.steps.filter((s: any) => filter === 'all' || (filter === 'pending' ? !['DONE', 'SKIPPED'].includes(s.status) : filter === 'critical' ? s.critical : filter === 'mine' ? s.assigneeId === user?.id : isOverdue(s)));
           if (!steps.length) return null;
           return (
             <div key={p.key} className="card overflow-hidden">
@@ -79,7 +90,7 @@ export default function Playbook() {
               {isOpen && (
                 <div className="divide-y divide-ink-100 border-t border-ink-100">
                   {steps.map((s: any) => (
-                    <StepRow key={s.key} s={s} leagueId={leagueId} expanded={openStep === s.key} onToggle={() => setOpenStep(openStep === s.key ? null : s.key)}
+                    <StepRow key={s.key} s={s} people={people} overdue={isOverdue(s)} leagueId={leagueId} expanded={openStep === s.key} onToggle={() => setOpenStep(openStep === s.key ? null : s.key)}
                       canEdit={isStaff} onAction={(a) => runAction(a, s)} onUpdate={(body) => update.mutate({ key: s.key, ...body })} saving={update.isPending} />
                   ))}
                 </div>
@@ -93,7 +104,7 @@ export default function Playbook() {
   );
 }
 
-function StepRow({ s, leagueId, expanded, onToggle, canEdit, onAction, onUpdate, saving }: { s: any; leagueId: string; expanded: boolean; onToggle: () => void; canEdit: boolean; onAction: (a: any) => void; onUpdate: (b: any) => void; saving: boolean }) {
+function StepRow({ s, people, overdue, leagueId, expanded, onToggle, canEdit, onAction, onUpdate, saving }: { s: any; people: any[]; overdue: boolean; leagueId: string; expanded: boolean; onToggle: () => void; canEdit: boolean; onAction: (a: any) => void; onUpdate: (b: any) => void; saving: boolean }) {
   const [notes, setNotes] = useState(s.notes ?? '');
   const Icon = s.status === 'DONE' ? Check : s.status === 'IN_PROGRESS' ? CircleDot : Circle;
   const routeFor = (a: any) => `/leagues/${leagueId}${a.route ? `/${a.route}` : ''}`;
@@ -109,6 +120,8 @@ function StepRow({ s, leagueId, expanded, onToggle, canEdit, onAction, onUpdate,
             <span className={cx('font-medium', s.status === 'DONE' && 'text-ink-500 line-through decoration-ink-300')}>{s.title}</span>
             {s.critical && <Badge color="red">Critical</Badge>}
             <Badge>{s.owner}</Badge>
+            {s.assigneeName && <Badge color="blue">{s.assigneeName}</Badge>}
+            {s.dueDate && s.status !== 'DONE' && <Badge color={overdue ? 'red' : 'gray'}>{overdue ? 'overdue · ' : 'due '}{new Date(s.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Badge>}
             {s.status !== 'NOT_STARTED' && s.status !== 'DONE' && <StatusBadge status={s.status} />}
             {s.attachments.length > 0 && <span className="flex items-center gap-0.5 text-xs text-ink-500"><Paperclip className="h-3 w-3" />{s.attachments.length}</span>}
           </button>
@@ -136,6 +149,17 @@ function StepRow({ s, leagueId, expanded, onToggle, canEdit, onAction, onUpdate,
               )}
               {canEdit && (
                 <>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-ink-600">Milestone owner
+                      <select className="input mt-1" value={s.assigneeId ?? ''} onChange={(e) => onUpdate({ assigneeId: e.target.value || null })}>
+                        <option value="">Unassigned</option>
+                        {people.map((p: any) => <option key={p.id} value={p.id}>{p.name} — {p.department}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold text-ink-600">Due date
+                      <input type="date" className="input mt-1" value={s.dueDate ? s.dueDate.slice(0, 10) : ''} onChange={(e) => onUpdate({ dueDate: e.target.value || null })} />
+                    </label>
+                  </div>
                   <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes, decisions, owner, deadlines…" />
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="secondary" loading={saving} onClick={() => onUpdate({ notes })}>Save notes</Button>

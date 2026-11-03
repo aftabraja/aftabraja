@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { DOC_TYPES } from '../lib/compliance.js';
-import { runExpiryChecks } from '../lib/jobs.js';
+import { runAllJobs } from '../lib/jobs.js';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { ah } from '../lib/http.js';
@@ -161,7 +161,7 @@ r.patch('/vendor-documents/:id', ah(async (req, res) => {
   res.json(d);
 }));
 
-r.post('/run-jobs', ah(async (_req, res) => res.json(await runExpiryChecks())));
+r.post('/run-jobs', ah(async (_req, res) => res.json(await runAllJobs())));
 
 r.get('/audit', ah(async (_req, res) => {
   res.json(await prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 300, include: { user: { select: { name: true, email: true } } } }));
