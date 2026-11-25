@@ -78,7 +78,7 @@ function BrowserFrame({ src, alt }: { src: string; alt: string }) {
     <div className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-pop">
       <div className="flex items-center gap-1.5 border-b border-ink-100 bg-ink-50 px-4 py-2.5">
         <span className="h-2.5 w-2.5 rounded-full bg-red-300" /><span className="h-2.5 w-2.5 rounded-full bg-amber-300" /><span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
-        <span className="ml-3 truncate rounded-md bg-white px-3 py-0.5 text-[11px] text-ink-400">app.sportsiq.in</span>
+        <span className="ml-3 truncate rounded-md bg-white px-3 py-0.5 text-[11px] text-ink-400">sportsiq.co.in</span>
       </div>
       <img src={src} alt={alt} className="block w-full" loading="lazy" />
     </div>

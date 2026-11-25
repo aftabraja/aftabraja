@@ -32,7 +32,7 @@ export async function sendEmail(to: string, subject: string, html: string) {
     return { delivered: false };
   }
   try {
-    await transport().sendMail({ from: process.env.MAIL_FROM ?? 'SportsIQ <no-reply@sportsiq.in>', to, subject, html });
+    await transport().sendMail({ from: process.env.MAIL_FROM ?? 'SportsIQ <no-reply@sportsiq.co.in>', to, subject, html });
     await prisma.emailLog.create({ data: { to, subject, html, status: 'SENT' } });
     return { delivered: true };
   } catch (e) {

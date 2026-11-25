@@ -17,7 +17,7 @@ web app on the same address; a managed PostgreSQL database holds the data.
 | Variable | Purpose |
 |---|---|
 | `SEED_DEMO` | `true` loads demo data on an empty database. Use `false` for a clean launch. |
-| `APP_URL` | Your custom domain, e.g. `https://app.sportsiq.in` (used in email links). Defaults to the Render URL. |
+| `APP_URL` | Your custom domain, e.g. `https://sportsiq.co.in` (used in email links). Defaults to the Render URL. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | Real email delivery. Until set, emails appear in Super Admin → Email Outbox. |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `PAYMENTS_TEST_MODE=false` | Live payments. |
 | `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_PUBLIC_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Permanent file storage (S3, Cloudflare R2, Spaces). |
@@ -27,6 +27,15 @@ web app on the same address; a managed PostgreSQL database holds the data.
 - The free web service sleeps after 15 minutes without visitors; the next visit takes ~1 minute to wake.
 - The free database expires after 30 days. Upgrade it (Basic plan) before real data goes in.
 - Uploaded files are stored on the service's disk and are lost on each redeploy. Set the `S3_*` variables for permanent storage.
+
+## Connecting your own domain (sportsiq.co.in)
+1. Render → the `sportsiq` service → **Settings → Custom Domains → Add Custom Domain**. Add `sportsiq.co.in`, then add `www.sportsiq.co.in`.
+2. Render shows the DNS records each name needs. Create exactly those at your domain registrar's DNS settings:
+   - `sportsiq.co.in` (the root, entered as `@` at most registrars): an **A record** to the IP address Render shows.
+   - `www`: a **CNAME** to your service's `….onrender.com` address.
+   Delete any other A, AAAA or CNAME records on `@` and `www` (registrars often add parking-page records).
+3. Back on Render, click **Verify** on each domain. DNS can take from a few minutes to a few hours; Render then issues the HTTPS certificate automatically.
+4. Service → **Environment** → add `APP_URL` = `https://sportsiq.co.in` and save (the service restarts). Emailed links (invites, password resets, surveys) then use your domain.
 
 ## Starting the demo again from scratch
 Render dashboard → `sportsiq-db` → delete and recreate it (or create a new Blueprint). The next boot reloads the demo.
